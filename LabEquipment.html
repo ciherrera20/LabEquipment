@@ -100,7 +100,7 @@ var saveAs=saveAs||navigator.msSaveBlob&&navigator.msSaveBlob.bind(navigator)||f
 		<div id="init-lacking">Your browser lacks required capabilities. Please upgrade it or switch to another to continue.</div>
 		<div id="init-loading"><div>Loading&hellip;</div></div>
 	</div>
-	<!-- UUID://B06965B9-64DB-43A6-A77B-40CFD8C5816F// --><tw-storydata name="Lab Equipment" startnode="3" creator="Tweego" creator-version="2.1.1+81d1d71" ifid="B06965B9-64DB-43A6-A77B-40CFD8C5816F" zoom="1" format="SugarCube" format-version="2.30.0" options="debug" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css"></style><script role="script" id="twine-user-script" type="text/twine-javascript">// Deep copies keys from the object from to the object to
+	<!-- UUID://B06965B9-64DB-43A6-A77B-40CFD8C5816F// --><tw-storydata name="Lab Equipment" startnode="3" creator="Tweego" creator-version="2.1.1+81d1d71" ifid="B06965B9-64DB-43A6-A77B-40CFD8C5816F" zoom="1" format="SugarCube" format-version="2.30.0" options="" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css"></style><script role="script" id="twine-user-script" type="text/twine-javascript">// Deep copies keys from the object from to the object to
 const cloneKeys = function(from, to) {
 	Object.keys(from).forEach(function(key) {
 		to[key] = clone(from[key]);
@@ -153,7 +153,7 @@ if (!Function.prototype.inheritFrom) {
 // EventDispatcher constructor
 const EventDispatcher = (function(){
     // Store object states
-    const states = new WeakMap();
+    const states = Object.create(null);
     
     /**
      * Populates EventDispatcher from a config object
@@ -163,14 +163,16 @@ const EventDispatcher = (function(){
      * @return				The EventDispatcher object
      */
     const populate = function(config) {
-        // Create internal object state
-        const state = Object.create(null);
-        states.set(this, state);
-        
-        state.eventNames = config.eventNames;
-        state.callbacks = Object.create(null);
-        
-        this.defineEvents(config.eventNames);
+        if (!states[this.getKey()]) {
+            // Create internal object state
+            const state = Object.create(null);
+            states[this.getKey()] = state;
+            
+            state.eventNames = config.eventNames;
+            state.callbacks = Object.create(null);
+            
+            this.defineEvents(config.eventNames);
+        }
     }
     
     /**
@@ -201,7 +203,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.defineEvents = function(eventNames) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Add event name arrays to callback object
@@ -219,7 +221,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.dispatchEvent = function(LEvent) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Retrieve event name
@@ -242,7 +244,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.addEventListener = function(eventName, callback) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Input validation
@@ -262,7 +264,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.removeEventListener = function(eventName, callback) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Input validation
@@ -284,9 +286,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.getEventListeners = function(eventName) {
         // Retrieve internal state
-        const state = states.get(this);
-        const callbacks = state.callbacks;
-        return callbacks[eventName];
+        return states[this.getKey()].callbacks[eventName];
     }
     
     /**
@@ -296,10 +296,52 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.getEventNames = function() {
         // Retrieve internal state
-        const state = states.get(this);
-        const eventNames = state.eventNames;
-        return eventNames.slice();
+        return states[this.getKey()].eventNames;
     }
+
+    EventDispatcher.prototype.hasEvent = function(eventName) {
+        return Boolean(states[this.getKey()].callbacks[eventName]);
+    }
+
+    Macro.add("on", {
+        tags: [],
+        handler() {
+            if (this.parent === null) {
+                throw new Error("Parent macro context for 'on' macro cannot be null");
+            }
+            const parentObject = this.parent.args[0];
+            const eventName = String(this.args[0]);
+            const isJS = this.args[1] === "JS";
+            let that = this;
+            if (!parentObject.hasEvent) {
+                throw new Error("Parent object must be an EventDispatcher");
+            } else if (!parentObject.hasEvent(eventName)) {
+                throw new Error("Parent object does not have an event names " + eventName);
+            }
+
+            let callback;
+            if (isJS) {
+                callback = Function("event", this.payload[0].contents);
+            } else {
+                callback = function(event) {
+                    let tempEvent;
+                    that.createShadowWrapper(
+                        function callback() {
+                            jQuery.wiki(that.payload[0].contents);
+                        },
+                        function done() {
+                            State.variables.event = tempEvent;
+                        }, 
+                        function start() {
+                            tempEvent = State.variables.event;
+                            State.variables.event = event;
+                        }
+                    )();
+                }
+            }
+            parentObject.addEventListener(eventName, callback);
+        }
+    });
 
     return EventDispatcher;
 })();
@@ -359,7 +401,7 @@ const Cloneable = (function() {
     }
 
     Cloneable.prototype.clone = function() {
-        console.log("Object cloned");
+        //console.log("Object cloned");
         return this.constructor.fromObj(this.toObj());
     }
 
@@ -370,6 +412,7 @@ const Cloneable = (function() {
     Cloneable.fromObj = function(obj) {
         if (this === Cloneable) {
             const cloneable = Object.create(Cloneable.prototype);
+            Object.assign(cloneable, obj);
             Cloneable.fromObj.call(cloneable, obj);
             return cloneable;
         }
@@ -445,6 +488,7 @@ const SCVariable = (function() {
     SCVariable.fromObj = function(obj) {
         if (this === SCVariable) {
             const scVariable = Object.create(SCVariable.prototype);
+            Object.assign(scVariable, obj);
             SCVariable.fromObj.call(scVariable, obj);
             return scVariable;
         }
@@ -461,6 +505,7 @@ const SCVariable = (function() {
 const LabEquipment = (function() {
     const populate = function(config) {
         this.displayName = config.displayName;
+        this.containedIn = config.containedIn;
     }
 
     const LabEquipment = function(key) {
@@ -483,6 +528,7 @@ const LabEquipment = (function() {
     LabEquipment.fromObj = function(obj) {
         if (this === LabEquipment) {
             const labEquipment = Object.create(LabEquipment.prototype);
+            Object.assign(labEquipment, obj);
             LabEquipment.fromObj.call(labEquipment, obj);
             return labEquipment;
         }
@@ -491,6 +537,7 @@ const LabEquipment = (function() {
 
         const config = Object.create(null);
         config.displayName = obj.displayName;
+        config.containedIn = obj.containedIn;
         populate.call(this, config);
     }
 
@@ -521,11 +568,17 @@ const EquipmentContainer = (function() {
     Cloneable.setupConstructor(EquipmentContainer, "EquipmentContainer");
 
     EquipmentContainer.prototype.add = function(item) {
+        if (item.containedIn) {
+            SCVariable.getVar(item.containedIn).remove(item);
+        }
+        if (this.singleItem && this.contents.length > 0) {
+            return;
+        }
         this.contents.push(item.getKey());
 
         const e = Object.create(null);
-        e.parent = this.getKey();
-        e.itemAdded = item.getKey();
+        e.parent = this;
+        e.itemAdded = item;
         this.dispatchEvent(LEvent("itemadded", e));
     }
 
@@ -548,8 +601,8 @@ const EquipmentContainer = (function() {
         const itemRemoved = this.contents.splice(index, 1)[0];
         
         const e = Object.create(null);
-        e.parent = this.getKey();
-        e.itemRemoved = itemRemoved.getKey();
+        e.parent = this;
+        e.itemRemoved = itemRemoved;
         this.dispatchEvent(LEvent("itemremoved", e));
 
 		return itemRemoved;
@@ -558,6 +611,7 @@ const EquipmentContainer = (function() {
     EquipmentContainer.fromObj = function(obj) {
         if (this === EquipmentContainer) {
             const equipmentContainer = Object.create(EquipmentContainer.prototype);
+            Object.assign(equipmentContainer, obj);
             EquipmentContainer.fromObj.call(equipmentContainer, obj);
             return equipmentContainer;
         }
@@ -595,11 +649,11 @@ const Balance = (function() {
 
     Balance.prototype.measureMass = function() {
         const measuredMass = this.offset + this.contents.reduce(function(acc, item) {
-			return acc += SCVariable.getVar(item).getMass();
+			return acc + SCVariable.getVar(item).getMass();
         }, 0);
         
         const e = Object.create(null);
-        e.parent = this.getKey();
+        e.parent = this;
         e.measuredMass = measuredMass;
         this.dispatchEvent(LEvent("measurement", e));
 
@@ -610,7 +664,7 @@ const Balance = (function() {
         this.offset = -(this.measureMass() - this.offset);
         
         const e = Object.create(null);
-        e.parent = this.getKey();
+        e.parent = this;
         e.offset = this.offset;
         this.dispatchEvent(LEvent("zero", e));
 	}
@@ -629,16 +683,47 @@ const Balance = (function() {
         populate.call(this, config);
     }
 
+    Macro.add("balance", {
+        tags: ["offset", "singleItem", "displayName"],
+        handler() {
+            console.log(this);
+            if (this.args.length !== 1) {
+                throw new Error("Balance macro requires a single argument");
+            }
+            let parentObject = this.args[0];
+            if (!parentObject) {
+                parentObject = Balance(this.args.raw.slice(1));
+                this.args[0] = parentObject;
+            } else {
+                if (!(parentObject instanceof Balance)) {
+                    throw new Error("Argument must be an instance of Balance");
+                }
+            }
+            let that = this;
+            this.payload.forEach(function(chunk) {
+                if (chunk.name === "offset") {
+                    parentObject.offset = Number(chunk.args[0]);
+                } else if (chunk.name === "singleItem") {
+                    parentObject.singleItem = Boolean(chunk.args[0]);
+                } else if (chunk.name === "displayName") {
+                    parentObject.displayName = String(chunk.args[0]);
+                }
+                jQuery(that.output).wiki(chunk.contents);
+            });
+        }
+    });
+
     return Balance;
 })();
-
-Balance("balance");
 
 const MaterialContainer = (function() {
     const populate = function(config) {
         this.contents = config.contents;
         this.restMass = config.restMass;
-        this.defineEvents("materialadded", "materialremoved", "containeremptied");
+        this.capacity = config.capacity || Infinity;
+        this.volume = config.volume || 0;
+        this.mass = config.mass || 0;
+        this.defineEvents("materialadded", "materialremoved", "containeremptied", "overflow");
     }
 
     const MaterialContainer = function(key, restMass) {
@@ -657,13 +742,79 @@ const MaterialContainer = (function() {
     MaterialContainer.inheritFrom(LabEquipment);
     Cloneable.setupConstructor(MaterialContainer, "MaterialContainer");
 
+    const updateMeasurements = function() {
+        let mass = 0;
+        this.volume = this.contents.reduce(function(volume, material) {
+            mass += material.mass;
+            return volume + material.volume;
+        }, 0);
+        this.mass = mass;
+    }
+
+    /**
+     * Add a material to this material container
+     * Triggers a materialadded event
+     * If the material being added causes the container to overflow, split it into material added 
+     * and material discarded and trigger an overflow event
+     * 
+     * @param material      The material to add
+     */
     MaterialContainer.prototype.add = function(material) {
+        const surplus = (this.volume + material.volume) - this.capacity;
+        if (surplus > 0) {
+            const e = Object.create(null);
+            e.parent = this;
+            e.materialAdded = material;
+            this.dispatchEvent(LEvent("overflow", e));
+        }
+
         this.contents.push(material);
+
+        const e = Object.create(null);
+        e.parent = this;
+        e.materialAdded = material;
+        e.previousVolume = this.volume;
+        e.previousContents = this.contents;
+
+        this.contents = MaterialManager.evaluateContents(clone(this.contents));
+        updateMeasurements.call(this);
+
+        this.dispatchEvent(LEvent("materialadded", e));
+    }
+
+    MaterialContainer.prototype.indexOf = function(material) {
+        return this.contents.indexOf(material);
+    }
+
+    MaterialContainer.prototype.remove = function(material) {
+        var index = this.indexOf(material);
+		if (index != -1) {
+			return this.removeIndex(index);
+		}
+		return null;
+    }
+
+    MaterialContainer.prototype.removeIndex = function(index) {
+        if (index < 0 || index >= this.contents.length) {
+			return null;	
+        }
+        const materialRemoved = this.contents.splice(index, 1)[0];
+        
+        this.volume -= materialRemoved.volume;
+        this.mass -= materialRemoved.mass;
+
+        const e = Object.create(null);
+        e.parent = this;
+        e.materialRemoved = materialRemoved;
+        this.dispatchEvent(LEvent("materialremoved", e));
+
+		return itemRemoved;
     }
 
     MaterialContainer.fromObj = function(obj) {
         if (this === MaterialContainer) {
             const materialContainer = Object.create(MaterialContainer.prototype);
+            Object.assign(materialContainer, obj);
             MaterialContainer.fromObj.call(materialContainer, obj);
             return materialContainer;
         }
@@ -672,11 +823,57 @@ const MaterialContainer = (function() {
         const config = Object.create(null);
         config.contents = obj.contents;
         config.restMass = obj.restMass;
+        config.capacity = obj.capacity;
+        config.volume = obj.volume;
+        config.mass = obj.mass;
         populate.call(this, config);
     }
 
+    Macro.add("container", {
+        tags: ["restMass", "capacity", "displayName"],
+        handler() {
+            console.log(this);
+            if (this.args.length !== 1) {
+                throw new Error("Container macro requires a single argument");
+            }
+            let parentObject = this.args[0];
+            if (!parentObject) {
+                parentObject = MaterialContainer(this.args.raw.slice(1));
+                this.args[0] = parentObject;
+            } else {
+                if (!(parentObject instanceof Balance)) {
+                    throw new Error("Argument must be an instance of MaterialContainer");
+                }
+            }
+            let that = this;
+            this.payload.forEach(function(chunk) {
+                if (chunk.name === "restMass") {
+                    parentObject.restMass = Number(chunk.args[0]);
+                } else if (chunk.name === "capacity") {
+                    parentObject.capacity = Number(chunk.args[0]);
+                } else if (chunk.name === "displayName") {
+                    parentObject.displayName = String(chunk.args[0]);
+                }
+                jQuery(that.output).wiki(chunk.contents);
+            });
+        }
+    });
+
     return MaterialContainer;
 })();
+
+/*const GraduatedCylinder = (function() {
+    const populate = function(config) {
+
+    }
+
+    const GraduatedCylinder = function(key) {
+        if (!this) {
+            const graduatedCylinder = Object.create(GraduatedCylinder.prototype);
+        }
+    }
+    GraduatedCylinder.inheritFrom(MaterialContainer);
+})();*/
 
 const Material = (function() {
     const populate = function(config) {
@@ -730,6 +927,7 @@ const Material = (function() {
     Material.fromObj = function(obj) {
         if (this === Material) {
             const material = Object.create(Material.prototype);
+            Object.assign(material, obj);
             Material.fromObj.call(material, obj);
             return material;
         }
@@ -934,7 +1132,6 @@ const MaterialManager = (function() {
     Macro.add("addRecipe", {
         tags: [],
         handler() {
-            console.log(this);
             let that = this;
             let args = this.args;
             if (args[args.length - 1] === "JS") {
@@ -973,7 +1170,19 @@ const MaterialManager = (function() {
 })();
 
 window.MaterialManager = MaterialManager;
-window.Material = Material;</script><tw-passagedata pid="1" name="StoryInit" tags="" position="100,100" size="100,100"></tw-passagedata><tw-passagedata pid="2" name="equipment" tags="nobr" position="225,100" size="100,100">Back to [[introduction]]</tw-passagedata><tw-passagedata pid="3" name="introduction" tags="nobr" position="350,100" size="100,100">&lt;h1&gt;Introduction&lt;/h1&gt;
+window.Material = Material;</script><tw-passagedata pid="1" name="StoryInit" tags="" position="100,100" size="100,100">&lt;&lt;balance $singleBalance&gt;&gt;
+    &lt;&lt;singleItem true&gt;&gt;
+    &lt;&lt;on zero JS&gt;&gt;
+        console.log(&quot;Single balance zeroed&quot;);
+    &lt;&lt;/on&gt;&gt;
+&lt;&lt;/balance&gt;&gt;
+
+&lt;&lt;balance $multiBalance&gt;&gt;
+    &lt;&lt;singleItem false&gt;&gt;
+    &lt;&lt;on zero JS&gt;&gt;
+        console.log(&quot;Multi balance zeroed&quot;);
+    &lt;&lt;/on&gt;&gt;
+&lt;&lt;/balance&gt;&gt;</tw-passagedata><tw-passagedata pid="2" name="equipment" tags="nobr" position="225,100" size="100,100">Back to [[introduction]]</tw-passagedata><tw-passagedata pid="3" name="introduction" tags="nobr" position="350,100" size="100,100">&lt;h1&gt;Introduction&lt;/h1&gt;
 
 This is a place to test lab [[equipment]]</tw-passagedata></tw-storydata>
 	<script id="script-sugarcube" type="text/javascript">

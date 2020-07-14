@@ -51,7 +51,7 @@ if (!Function.prototype.inheritFrom) {
 // EventDispatcher constructor
 const EventDispatcher = (function(){
     // Store object states
-    const states = new WeakMap();
+    const states = Object.create(null);
     
     /**
      * Populates EventDispatcher from a config object
@@ -61,14 +61,16 @@ const EventDispatcher = (function(){
      * @return				The EventDispatcher object
      */
     const populate = function(config) {
-        // Create internal object state
-        const state = Object.create(null);
-        states.set(this, state);
-        
-        state.eventNames = config.eventNames;
-        state.callbacks = Object.create(null);
-        
-        this.defineEvents(config.eventNames);
+        if (!states[this.getKey()]) {
+            // Create internal object state
+            const state = Object.create(null);
+            states[this.getKey()] = state;
+            
+            state.eventNames = config.eventNames;
+            state.callbacks = Object.create(null);
+            
+            this.defineEvents(config.eventNames);
+        }
     }
     
     /**
@@ -99,7 +101,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.defineEvents = function(eventNames) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Add event name arrays to callback object
@@ -117,7 +119,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.dispatchEvent = function(LEvent) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Retrieve event name
@@ -140,7 +142,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.addEventListener = function(eventName, callback) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Input validation
@@ -160,7 +162,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.removeEventListener = function(eventName, callback) {
         // Retrieve internal state
-        const state = states.get(this);
+        const state = states[this.getKey()];
         const callbacks = state.callbacks;
         
         // Input validation
@@ -182,9 +184,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.getEventListeners = function(eventName) {
         // Retrieve internal state
-        const state = states.get(this);
-        const callbacks = state.callbacks;
-        return callbacks[eventName];
+        return states[this.getKey()].callbacks[eventName];
     }
     
     /**
@@ -194,10 +194,52 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.getEventNames = function() {
         // Retrieve internal state
-        const state = states.get(this);
-        const eventNames = state.eventNames;
-        return eventNames.slice();
+        return states[this.getKey()].eventNames;
     }
+
+    EventDispatcher.prototype.hasEvent = function(eventName) {
+        return Boolean(states[this.getKey()].callbacks[eventName]);
+    }
+
+    Macro.add("on", {
+        tags: [],
+        handler() {
+            if (this.parent === null) {
+                throw new Error("Parent macro context for 'on' macro cannot be null");
+            }
+            const parentObject = this.parent.args[0];
+            const eventName = String(this.args[0]);
+            const isJS = this.args[1] === "JS";
+            let that = this;
+            if (!parentObject.hasEvent) {
+                throw new Error("Parent object must be an EventDispatcher");
+            } else if (!parentObject.hasEvent(eventName)) {
+                throw new Error("Parent object does not have an event names " + eventName);
+            }
+
+            let callback;
+            if (isJS) {
+                callback = Function("event", this.payload[0].contents);
+            } else {
+                callback = function(event) {
+                    let tempEvent;
+                    that.createShadowWrapper(
+                        function callback() {
+                            jQuery.wiki(that.payload[0].contents);
+                        },
+                        function done() {
+                            State.variables.event = tempEvent;
+                        }, 
+                        function start() {
+                            tempEvent = State.variables.event;
+                            State.variables.event = event;
+                        }
+                    )();
+                }
+            }
+            parentObject.addEventListener(eventName, callback);
+        }
+    });
 
     return EventDispatcher;
 })();
@@ -257,7 +299,7 @@ const Cloneable = (function() {
     }
 
     Cloneable.prototype.clone = function() {
-        console.log("Object cloned");
+        //console.log("Object cloned");
         return this.constructor.fromObj(this.toObj());
     }
 
@@ -361,6 +403,7 @@ const SCVariable = (function() {
 const LabEquipment = (function() {
     const populate = function(config) {
         this.displayName = config.displayName;
+        this.containedIn = config.containedIn;
     }
 
     const LabEquipment = function(key) {
@@ -392,6 +435,7 @@ const LabEquipment = (function() {
 
         const config = Object.create(null);
         config.displayName = obj.displayName;
+        config.containedIn = obj.containedIn;
         populate.call(this, config);
     }
 
@@ -422,6 +466,12 @@ const EquipmentContainer = (function() {
     Cloneable.setupConstructor(EquipmentContainer, "EquipmentContainer");
 
     EquipmentContainer.prototype.add = function(item) {
+        if (item.containedIn) {
+            SCVariable.getVar(item.containedIn).remove(item);
+        }
+        if (this.singleItem && this.contents.length > 0) {
+            return;
+        }
         this.contents.push(item.getKey());
 
         const e = Object.create(null);
@@ -531,10 +581,38 @@ const Balance = (function() {
         populate.call(this, config);
     }
 
+    Macro.add("balance", {
+        tags: ["offset", "singleItem", "displayName"],
+        handler() {
+            console.log(this);
+            if (this.args.length !== 1) {
+                throw new Error("Balance macro requires a single argument");
+            }
+            let parentObject = this.args[0];
+            if (!parentObject) {
+                parentObject = Balance(this.args.raw.slice(1));
+                this.args[0] = parentObject;
+            } else {
+                if (!(parentObject instanceof Balance)) {
+                    throw new Error("Argument must be an instance of Balance");
+                }
+            }
+            let that = this;
+            this.payload.forEach(function(chunk) {
+                if (chunk.name === "offset") {
+                    parentObject.offset = Number(chunk.args[0]);
+                } else if (chunk.name === "singleItem") {
+                    parentObject.singleItem = Boolean(chunk.args[0]);
+                } else if (chunk.name === "displayName") {
+                    parentObject.displayName = String(chunk.args[0]);
+                }
+                jQuery(that.output).wiki(chunk.contents);
+            });
+        }
+    });
+
     return Balance;
 })();
-
-Balance("balance");
 
 const MaterialContainer = (function() {
     const populate = function(config) {
@@ -542,6 +620,7 @@ const MaterialContainer = (function() {
         this.restMass = config.restMass;
         this.capacity = config.capacity || Infinity;
         this.volume = config.volume || 0;
+        this.mass = config.mass || 0;
         this.defineEvents("materialadded", "materialremoved", "containeremptied", "overflow");
     }
 
@@ -561,10 +640,13 @@ const MaterialContainer = (function() {
     MaterialContainer.inheritFrom(LabEquipment);
     Cloneable.setupConstructor(MaterialContainer, "MaterialContainer");
 
-    const updateVolume = function() {
+    const updateMeasurements = function() {
+        let mass = 0;
         this.volume = this.contents.reduce(function(volume, material) {
+            mass += material.mass;
             return volume + material.volume;
         }, 0);
+        this.mass = mass;
     }
 
     /**
@@ -578,16 +660,10 @@ const MaterialContainer = (function() {
     MaterialContainer.prototype.add = function(material) {
         const surplus = (this.volume + material.volume) - this.capacity;
         if (surplus > 0) {
-            const discarded = material.splitOff(surplus / material.volume);
-
             const e = Object.create(null);
             e.parent = this;
-            e.materialAdded = materialAdded;
-            e.materialDiscarded = discarded;
+            e.materialAdded = material;
             this.dispatchEvent(LEvent("overflow", e));
-        }
-        if (material.volume === 0) {
-            return;
         }
 
         this.contents.push(material);
@@ -599,7 +675,7 @@ const MaterialContainer = (function() {
         e.previousContents = this.contents;
 
         this.contents = MaterialManager.evaluateContents(clone(this.contents));
-        updateVolume.call(this);
+        updateMeasurements.call(this);
 
         this.dispatchEvent(LEvent("materialadded", e));
     }
@@ -622,6 +698,9 @@ const MaterialContainer = (function() {
         }
         const materialRemoved = this.contents.splice(index, 1)[0];
         
+        this.volume -= materialRemoved.volume;
+        this.mass -= materialRemoved.mass;
+
         const e = Object.create(null);
         e.parent = this;
         e.materialRemoved = materialRemoved;
@@ -644,23 +723,55 @@ const MaterialContainer = (function() {
         config.restMass = obj.restMass;
         config.capacity = obj.capacity;
         config.volume = obj.volume;
+        config.mass = obj.mass;
         populate.call(this, config);
     }
+
+    Macro.add("container", {
+        tags: ["restMass", "capacity", "displayName"],
+        handler() {
+            console.log(this);
+            if (this.args.length !== 1) {
+                throw new Error("Container macro requires a single argument");
+            }
+            let parentObject = this.args[0];
+            if (!parentObject) {
+                parentObject = MaterialContainer(this.args.raw.slice(1));
+                this.args[0] = parentObject;
+            } else {
+                if (!(parentObject instanceof Balance)) {
+                    throw new Error("Argument must be an instance of MaterialContainer");
+                }
+            }
+            let that = this;
+            this.payload.forEach(function(chunk) {
+                if (chunk.name === "restMass") {
+                    parentObject.restMass = Number(chunk.args[0]);
+                } else if (chunk.name === "capacity") {
+                    parentObject.capacity = Number(chunk.args[0]);
+                } else if (chunk.name === "displayName") {
+                    parentObject.displayName = String(chunk.args[0]);
+                }
+                jQuery(that.output).wiki(chunk.contents);
+            });
+        }
+    });
 
     return MaterialContainer;
 })();
 
-const MaterialSource = (function() {
+/*const GraduatedCylinder = (function() {
     const populate = function(config) {
 
     }
 
-    const MaterialSource = function() {
-
+    const GraduatedCylinder = function(key) {
+        if (!this) {
+            const graduatedCylinder = Object.create(GraduatedCylinder.prototype);
+        }
     }
-
-    return MaterialSource;
-})();
+    GraduatedCylinder.inheritFrom(MaterialContainer);
+})();*/
 
 const Material = (function() {
     const populate = function(config) {
@@ -919,7 +1030,6 @@ const MaterialManager = (function() {
     Macro.add("addRecipe", {
         tags: [],
         handler() {
-            console.log(this);
             let that = this;
             let args = this.args;
             if (args[args.length - 1] === "JS") {

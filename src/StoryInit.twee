@@ -1,1 +1,15 @@
 :: StoryInit
+
+<<balance $singleBalance>>
+    <<singleItem true>>
+    <<on zero JS>>
+        console.log("Single balance zeroed");
+    <</on>>
+<</balance>>
+
+<<balance $multiBalance>>
+    <<singleItem false>>
+    <<on zero JS>>
+        console.log("Multi balance zeroed");
+    <</on>>
+<</balance>>
