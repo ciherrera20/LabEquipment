@@ -100,7 +100,7 @@ var saveAs=saveAs||navigator.msSaveBlob&&navigator.msSaveBlob.bind(navigator)||f
 		<div id="init-lacking">Your browser lacks required capabilities. Please upgrade it or switch to another to continue.</div>
 		<div id="init-loading"><div>Loading&hellip;</div></div>
 	</div>
-	<!-- UUID://B06965B9-64DB-43A6-A77B-40CFD8C5816F// --><tw-storydata name="Lab Equipment" startnode="3" creator="Tweego" creator-version="2.1.1+81d1d71" ifid="B06965B9-64DB-43A6-A77B-40CFD8C5816F" zoom="1" format="SugarCube" format-version="2.30.0" options="" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css"></style><script role="script" id="twine-user-script" type="text/twine-javascript">// Deep copies keys from the object from to the object to
+	<!-- UUID://B06965B9-64DB-43A6-A77B-40CFD8C5816F// --><tw-storydata name="Lab Equipment" startnode="3" creator="Tweego" creator-version="2.1.1+81d1d71" ifid="B06965B9-64DB-43A6-A77B-40CFD8C5816F" zoom="1" format="SugarCube" format-version="2.30.0" options="debug" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css"></style><script role="script" id="twine-user-script" type="text/twine-javascript">// Deep copies keys from the object from to the object to
 const cloneKeys = function(from, to) {
 	Object.keys(from).forEach(function(key) {
 		to[key] = clone(from[key]);
@@ -684,7 +684,7 @@ const Balance = (function() {
     }
 
     Macro.add("balance", {
-        tags: ["offset", "singleItem", "displayName"],
+        tags: ["offset", "singleItem", "displayName", "displayContents"],
         handler() {
             console.log(this);
             if (this.args.length !== 1) {
@@ -723,7 +723,7 @@ const MaterialContainer = (function() {
         this.capacity = config.capacity || Infinity;
         this.volume = config.volume || 0;
         this.mass = config.mass || 0;
-        this.defineEvents("materialadded", "materialremoved", "containeremptied", "overflow");
+        this.defineEvents(["materialadded", "materialremoved", "emptied", "overflow"]);
     }
 
     const MaterialContainer = function(key, restMass) {
@@ -794,6 +794,21 @@ const MaterialContainer = (function() {
 		return null;
     }
 
+    MaterialContainer.prototype.emptyInto = function(newContainer) {
+        while (this.contents.length !== 0) {
+            if (newContainer) {
+                newContainer.add(this.contents.pop());
+            } else {
+                this.contents.pop();
+            }
+        }
+
+        const e = Object.create(null);
+        e.parent = this;
+        e.newContainer = newContainer;
+        this.dispatchEvent(LEvent("emptied", e));
+    }
+
     MaterialContainer.prototype.removeIndex = function(index) {
         if (index < 0 || index >= this.contents.length) {
 			return null;	
@@ -810,6 +825,10 @@ const MaterialContainer = (function() {
 
 		return itemRemoved;
     }
+
+	MaterialContainer.prototype.getMass = function() {
+		return this.mass;		
+	}
 
     MaterialContainer.fromObj = function(obj) {
         if (this === MaterialContainer) {
@@ -830,7 +849,7 @@ const MaterialContainer = (function() {
     }
 
     Macro.add("container", {
-        tags: ["restMass", "capacity", "displayName"],
+        tags: ["restMass", "capacity", "displayName", "addMaterial", "emptyInto"],
         handler() {
             console.log(this);
             if (this.args.length !== 1) {
@@ -853,6 +872,14 @@ const MaterialContainer = (function() {
                     parentObject.capacity = Number(chunk.args[0]);
                 } else if (chunk.name === "displayName") {
                     parentObject.displayName = String(chunk.args[0]);
+                } else if (chunk.name === "addMaterial") {
+                    const material = chunk.args[0];
+                    if (!(material instanceof Material)) {
+                        throw new Error("addMaterial argument must be an instance of Material");
+                    }
+                    parentObject.add(material);
+                } else if (chunk.name === "emptyInto") {
+                    parentObject.emptyInto(chunk.args[0]);
                 }
                 jQuery(that.output).wiki(chunk.contents);
             });
@@ -1182,7 +1209,10 @@ window.Material = Material;</script><tw-passagedata pid="1" name="StoryInit" tag
     &lt;&lt;on zero JS&gt;&gt;
         console.log(&quot;Multi balance zeroed&quot;);
     &lt;&lt;/on&gt;&gt;
-&lt;&lt;/balance&gt;&gt;</tw-passagedata><tw-passagedata pid="2" name="equipment" tags="nobr" position="225,100" size="100,100">Back to [[introduction]]</tw-passagedata><tw-passagedata pid="3" name="introduction" tags="nobr" position="350,100" size="100,100">&lt;h1&gt;Introduction&lt;/h1&gt;
+&lt;&lt;/balance&gt;&gt;
+
+&lt;&lt;container $container0&gt;&gt;
+&lt;&lt;/container&gt;&gt;</tw-passagedata><tw-passagedata pid="2" name="equipment" tags="nobr" position="225,100" size="100,100">Back to [[introduction]]</tw-passagedata><tw-passagedata pid="3" name="introduction" tags="nobr" position="350,100" size="100,100">&lt;h1&gt;Introduction&lt;/h1&gt;
 
 This is a place to test lab [[equipment]]</tw-passagedata></tw-storydata>
 	<script id="script-sugarcube" type="text/javascript">

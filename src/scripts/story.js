@@ -228,7 +228,11 @@ const EventDispatcher = (function(){
                             jQuery.wiki(that.payload[0].contents);
                         },
                         function done() {
-                            State.variables.event = tempEvent;
+                            if (tempEvent === undefined) {
+                                delete State.variables.event;
+                            } else {
+                                State.variables.event = tempEvent;
+                            }
                         }, 
                         function start() {
                             tempEvent = State.variables.event;
@@ -470,7 +474,7 @@ const EquipmentContainer = (function() {
             SCVariable.getVar(item.containedIn).remove(item);
         }
         if (this.singleItem && this.contents.length > 0) {
-            return;
+            this.removeAll();
         }
         this.contents.push(item.getKey());
 
@@ -492,18 +496,30 @@ const EquipmentContainer = (function() {
 		return null;
     }
 
+    EquipmentContainer.prototype.removeAll = function() {
+        let that = this;
+        this.contents.forEach(function(item, i) {
+            that.removeIndex(i);
+        });
+    }
+
     EquipmentContainer.prototype.removeIndex = function(index) {
         if (index < 0 || index >= this.contents.length) {
 			return null;	
         }
-        const itemRemoved = this.contents.splice(index, 1)[0];
-        
+        const itemRemoved = SCVariable.getVar(this.contents.splice(index, 1)[0]);
+        itemRemoved.containedIn = undefined;
+
         const e = Object.create(null);
         e.parent = this;
         e.itemRemoved = itemRemoved;
         this.dispatchEvent(LEvent("itemremoved", e));
 
 		return itemRemoved;
+    }
+
+    EquipmentContainer.prototype.get = function(index) {
+        return SCVariable.getVar(this.contents[index]);
     }
 
     EquipmentContainer.fromObj = function(obj) {
@@ -527,6 +543,7 @@ const EquipmentContainer = (function() {
 const Balance = (function() {
     const populate = function(config) {
         this.offset = config.offset;
+        this.decimalPlaces = config.decimalPlaces;
         this.defineEvents(["zero", "measurement"]);
     }
 
@@ -540,13 +557,14 @@ const Balance = (function() {
 
         const config = Object.create(null);
         config.offset = Math.floor((Math.random() * 11) - 5);
+        config.decimalPlaces = Infinity;
         populate.call(this, config);
     }
     Balance.inheritFrom(EquipmentContainer);
     Cloneable.setupConstructor(Balance, "Balance");
 
     Balance.prototype.measureMass = function() {
-        const measuredMass = this.offset + this.contents.reduce(function(acc, item) {
+        let measuredMass = this.offset + this.contents.reduce(function(acc, item) {
 			return acc + SCVariable.getVar(item).getMass();
         }, 0);
         
@@ -554,6 +572,10 @@ const Balance = (function() {
         e.parent = this;
         e.measuredMass = measuredMass;
         this.dispatchEvent(LEvent("measurement", e));
+
+        if (this.decimalPlaces !== Infinity) {
+            measuredMass = Math.round(measuredMass * Math.pow(10, this.decimalPlaces)) / Math.pow(10, this.decimalPlaces);
+        }
 
         return measuredMass;
     }
@@ -578,11 +600,12 @@ const Balance = (function() {
 
         const config = Object.create(null);
         config.offset = obj.offset;
+        config.decimalPlaces = obj.decimalPlaces;
         populate.call(this, config);
     }
 
     Macro.add("balance", {
-        tags: ["offset", "singleItem", "displayName"],
+        tags: ["offset", "singleItem", "decimalPlaces", "displayName", "displayContents"],
         handler() {
             console.log(this);
             if (this.args.length !== 1) {
@@ -603,6 +626,8 @@ const Balance = (function() {
                     parentObject.offset = Number(chunk.args[0]);
                 } else if (chunk.name === "singleItem") {
                     parentObject.singleItem = Boolean(chunk.args[0]);
+                } else if (chunk.name === "decimalPlaces") {
+                    parentObject.decimalPlaces = Number(chunk.args[0]);
                 } else if (chunk.name === "displayName") {
                     parentObject.displayName = String(chunk.args[0]);
                 }
@@ -620,8 +645,8 @@ const MaterialContainer = (function() {
         this.restMass = config.restMass;
         this.capacity = config.capacity || Infinity;
         this.volume = config.volume || 0;
-        this.mass = config.mass || 0;
-        this.defineEvents("materialadded", "materialremoved", "containeremptied", "overflow");
+        this.contentMass = config.contentMass || 0;
+        this.defineEvents(["materialadded", "materialremoved", "emptied", "overflow"]);
     }
 
     const MaterialContainer = function(key, restMass) {
@@ -641,12 +666,12 @@ const MaterialContainer = (function() {
     Cloneable.setupConstructor(MaterialContainer, "MaterialContainer");
 
     const updateMeasurements = function() {
-        let mass = 0;
+        let contentMass = 0;
         this.volume = this.contents.reduce(function(volume, material) {
-            mass += material.mass;
-            return volume + material.volume;
+            contentMass += material.getMass();
+            return volume + material.getVolume();
         }, 0);
-        this.mass = mass;
+        this.contentMass = contentMass;
     }
 
     /**
@@ -658,7 +683,7 @@ const MaterialContainer = (function() {
      * @param material      The material to add
      */
     MaterialContainer.prototype.add = function(material) {
-        const surplus = (this.volume + material.volume) - this.capacity;
+        const surplus = (this.volume + material.getVolume()) - this.capacity;
         if (surplus > 0) {
             const e = Object.create(null);
             e.parent = this;
@@ -684,12 +709,46 @@ const MaterialContainer = (function() {
         return this.contents.indexOf(material);
     }
 
-    MaterialContainer.prototype.remove = function(material) {
-        var index = this.indexOf(material);
+    const indexOfLabel = function(label) {
+        return this.contents.findIndex(function(material) {
+            return material.label === label;
+        });
+    }
+
+    MaterialContainer.prototype.remove = function(label) {
+        var index = indexOfLabel.call(this, label);
 		if (index != -1) {
 			return this.removeIndex(index);
 		}
 		return null;
+    }
+
+    MaterialContainer.prototype.has = function(label) {
+        return indexOfLabel.call(this, label) !== -1;
+    }
+
+    MaterialContainer.prototype.get = function(label) {
+        const index = indexOfLabel.call(this, label);
+        if (index !== -1) {
+            return this.contents[index];
+        }
+    }
+
+    MaterialContainer.prototype.emptyInto = function(newContainer) {
+        while (this.contents.length !== 0) {
+            if (newContainer) {
+                newContainer.add(this.contents.pop());
+            } else {
+                this.contents.pop();
+            }
+        }
+
+        updateMeasurements.call(this);
+
+        const e = Object.create(null);
+        e.parent = this;
+        e.newContainer = newContainer;
+        this.dispatchEvent(LEvent("emptied", e));
     }
 
     MaterialContainer.prototype.removeIndex = function(index) {
@@ -698,16 +757,20 @@ const MaterialContainer = (function() {
         }
         const materialRemoved = this.contents.splice(index, 1)[0];
         
-        this.volume -= materialRemoved.volume;
-        this.mass -= materialRemoved.mass;
+        this.volume -= materialRemoved.getVolume();
+        this.contentMass -= materialRemoved.getMass();
 
         const e = Object.create(null);
         e.parent = this;
         e.materialRemoved = materialRemoved;
         this.dispatchEvent(LEvent("materialremoved", e));
 
-		return itemRemoved;
+		return materialRemoved;
     }
+
+	MaterialContainer.prototype.getMass = function() {
+		return this.restMass + this.contentMass;
+	}
 
     MaterialContainer.fromObj = function(obj) {
         if (this === MaterialContainer) {
@@ -723,12 +786,12 @@ const MaterialContainer = (function() {
         config.restMass = obj.restMass;
         config.capacity = obj.capacity;
         config.volume = obj.volume;
-        config.mass = obj.mass;
+        config.contentMass = obj.contentMass;
         populate.call(this, config);
     }
 
     Macro.add("container", {
-        tags: ["restMass", "capacity", "displayName"],
+        tags: ["restMass", "capacity", "displayName", "addMaterial", "emptyInto"],
         handler() {
             console.log(this);
             if (this.args.length !== 1) {
@@ -751,6 +814,14 @@ const MaterialContainer = (function() {
                     parentObject.capacity = Number(chunk.args[0]);
                 } else if (chunk.name === "displayName") {
                     parentObject.displayName = String(chunk.args[0]);
+                } else if (chunk.name === "addMaterial") {
+                    const material = chunk.args[0];
+                    if (!(material instanceof Material)) {
+                        throw new Error("addMaterial argument must be an instance of Material");
+                    }
+                    parentObject.add(material);
+                } else if (chunk.name === "emptyInto") {
+                    parentObject.emptyInto(chunk.args[0]);
                 }
                 jQuery(that.output).wiki(chunk.contents);
             });
@@ -776,12 +847,16 @@ const MaterialContainer = (function() {
 const Material = (function() {
     const populate = function(config) {
         this.label = config.label;
-        this.volume = config.volume;
-        this.mass = config.mass;
+        if (config.solid) {
+            this.mass = config.mass;
+        } else {
+            this.volume = config.volume;
+        }
+        this.density = config.density;
         this.solid = config.solid;
     }
 
-    const Material = function(label, volume, mass, solid = false) {
+    const Material = function(label, volume, density, solid = false) {
         if (!this) {
             const material = Object.create(Material.prototype);
             Material.call(material, ...arguments);
@@ -791,8 +866,12 @@ const Material = (function() {
 
         const config = Object.create(null);
         config.label = label;
-        config.volume = volume;
-        config.mass = mass;
+        if (solid) {
+            config.mass = volume;
+        } else {
+            config.volume = volume;
+        }
+        config.density = density;
         config.solid = solid;
         populate.call(this, config);
     }
@@ -804,22 +883,44 @@ const Material = (function() {
         Cloneable.call(newMaterial);
         
         Object.assign(newMaterial, this);
-        newMaterial.volume *= percentage;
-        newMaterial.mass *= percentage;
+        if (this.solid) {
+            newMaterial.mass *= percentage;
+            this.mass *= (1 - percentage);
+        } else {
+            newMaterial.volume *= percentage;
+            this.volume *= (1 - percentage);
+        }
 
-        this.volume *= (1 - percentage);
-        this.mass *= (1 - percentage);
         return newMaterial;
     }
 
     Material.prototype.combineLike = function(material) {
         if (material.label === this.label) {
-            this.volume += material.volume;
-            this.mass += material.mass;
-            material.volume = 0;
-            material.mass = 0;
+            if (this.solid) {
+                this.mass += material.mass;
+                material.mass = 0;
+            } else {
+                this.volume += material.volume;
+                material.volume = 0;
+            }
         }
         return this;
+    }
+
+    Material.prototype.getMass = function() {
+        if (this.solid) {
+            return this.mass;
+        } else {
+            return this.density * this.volume;
+        }
+    }
+
+    Material.prototype.getVolume = function() {
+        if (this.solid) {
+            return this.mass / this.density;
+        } else {
+            return this.volume;
+        }
     }
 
     Material.fromObj = function(obj) {
@@ -953,12 +1054,14 @@ const MaterialManager = (function() {
                     delete contentMap[label];
                 });
                 newMaterials.forEach(function(newMaterial) {
-                    const label = newMaterial.label;
-                    const existingMaterial = contentMap[label];
-                    if (existingMaterial) {
-                        newMaterial = combineLike([existingMaterial, newMaterial]);
+                    if (newMaterial.getVolume() > 0 || newMaterial.getMass() > 0) {
+                        const label = newMaterial.label;
+                        const existingMaterial = contentMap[label];
+                        if (existingMaterial) {
+                            newMaterial = combineLike([existingMaterial, newMaterial]);
+                        }
+                        contentMap[label] = newMaterial;
                     }
-                    contentMap[label] = newMaterial;
                 });
             }
         });
@@ -1046,8 +1149,16 @@ const MaterialManager = (function() {
                             results = State.variables.results;
                         },
                         function done() {
-                            State.variables.materials = tempMaterials;
-                            State.variables.results = tempResults;
+                            if (tempMaterials === undefined) {
+                                delete State.variables.materials;
+                            } else {
+                                State.variables.materials = tempMaterials;
+                            }
+                            if (tempResults === undefined) {
+                                delete State.variables.results;
+                            } else {
+                                State.variables.results = tempResults;
+                            }
                         }, 
                         function start() {
                             tempMaterials = State.variables.materials;

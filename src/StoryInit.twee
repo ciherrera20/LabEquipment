@@ -13,3 +13,6 @@
         console.log("Multi balance zeroed");
     <</on>>
 <</balance>>
+
+<<container $container0>>
+<</container>>
