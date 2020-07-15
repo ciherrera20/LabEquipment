@@ -689,6 +689,7 @@ const MaterialContainer = (function() {
             e.parent = this;
             e.materialAdded = material;
             this.dispatchEvent(LEvent("overflow", e));
+            return;
         }
 
         this.contents.push(material);
@@ -1024,7 +1025,7 @@ const MaterialManager = (function() {
 
             // If there are multiple of the same material, combine them, otherwise, just unwrap the array
             if (materials.length > 1) {
-                combineLike(materials);
+                result = combineLike(materials);
             } else {
                 result = materials[0];
             }
@@ -1098,6 +1099,8 @@ const MaterialManager = (function() {
                 return combined.combineLike(material);
             }
         });
+
+        console.log("Combine like result", result);
 
         return result;
     }
