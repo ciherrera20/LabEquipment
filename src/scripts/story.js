@@ -948,14 +948,40 @@ const MaterialManager = (function() {
     const multipleLabelMap = new WeakMap(); // A map whose keys are recipes with multiple labels
     const labelMap = Object.create(null); // An object whose keys are labels and whose values are arrays of recipes with that label
 
+    // Creates and returns a wrapper function for the given callback that validates the callback's given materials and results
+    const createSafetyWrapper = function(labels, callback) {
+        labels.forEach(function(label) {
+            if (typeof label !== "string") {
+                throw new Error("All recipe labels must be strings!");
+            }
+        });
+        const wrapper = function(materials) {
+            labels.forEach(function(label, i) {
+                if (label !== materials[i].label) {
+                    throw new Error("The given material does not match the recipe's label!");
+                }
+            });
+            const results = callback(materials);
+            if (labels.length === 1) {
+                if (results.length > 1) {
+                    throw new Error("Multiple materials returned when only one was expected!");
+                }
+                if (labels[0].label === results[0].label) {
+                    throw new Error("A recipe with a single label must return a single material with that same label!");
+                }
+            }
+            return results;
+        }
+        return wrapper;
+    }
+
     /**
      * Creates a recipe used to combine materials
      * 
      * @param labels       A list of labels to label in order to operate the recipe on
-     * @param callback      A string, either javascript or SugarCube script, to evaluate
-     * @param isJS          Whether the callback is javascript or SugarCube script
+     * @param callback     A string, either javascript or SugarCube script, to evaluate
      */
-    const Recipe = function(labels, callback, isJS = false) {
+    const Recipe = function(labels, callback) {
         const labelsSeen = Object.create(null);
         labels.forEach(function(label) {
             if (labelsSeen[label]) {
@@ -967,8 +993,7 @@ const MaterialManager = (function() {
 
         const recipe = Object.create(Recipe.prototype);
         recipe.labels = labels;
-        recipe.callback = callback;
-        recipe.isJS = isJS;
+        recipe.callback = createSafetyWrapper(labels, callback);
 
         if (recipe.labels.length === 1) {
             singleLabelRecipes.push(recipe);
@@ -986,17 +1011,19 @@ const MaterialManager = (function() {
 
         return recipe;
     }
-    
+
     Recipe.prototype.evaluate = function(materials) {
         return this.callback(clone(materials));
     }
 
+    /**
+     * Add a recipe to the material manager
+     * 
+     * @param labels            An array of material labels to match
+     * @param callback          A callback that processes the materials matched
+     */
     MaterialManager.addRecipe = function(labels, callback) {
-        const recipe = Recipe(labels, callback, false);
-    }
-
-    MaterialManager.addRecipeJS = function(labels, callback) {
-        const recipe = Recipe(labels, callback, true)
+        const recipe = Recipe(labels, callback);
     }
 
     /**
@@ -1080,6 +1107,13 @@ const MaterialManager = (function() {
         }
     }
 
+    /**
+     * Combines an array of like materials (matching labels)
+     * Attempts to find a single label rule to combine the materials
+     * If no rule is found, the function defaults to the Material.prototype.combineLike function
+     * 
+     * @param materials 
+     */
     const combineLike = function(materials) {
         // Find the first single label recipe that matches the label
         const label = materials[0].label;
@@ -1091,7 +1125,7 @@ const MaterialManager = (function() {
         }
 
         // If a recipe is found, use it to combine the matching material
-        // Otherwise, use the default combineLike function
+        // Otherwise, use the default Material.prototype.combineLike function
         const result = materials.reduce(function(combined, material) {
             if (recipe) {
                 return recipe.evaluate([combined, material])[0];
@@ -1105,33 +1139,6 @@ const MaterialManager = (function() {
         return result;
     }
 
-    // Creates and returns a wrapper function for the given callback that validates the callback's given materials and results
-    const createSafetyWrapper = function(labels, callback) {
-        labels.forEach(function(label) {
-            if (typeof label !== "string") {
-                throw new Error("All recipe labels must be strings!");
-            }
-        });
-        const wrapper = function(materials) {
-            labels.forEach(function(label, i) {
-                if (label !== materials[i].label) {
-                    throw new Error("The given material does not match the recipe's label!");
-                }
-            });
-            const results = callback(materials);
-            if (labels.length === 1) {
-                if (results.length > 1) {
-                    throw new Error("Multiple materials returned when only one was expected!");
-                }
-                if (labels[0].label === results[0].label) {
-                    throw new Error("A recipe with a single label must return a single material with that same label!");
-                }
-            }
-            return results;
-        }
-        return wrapper;
-    }
-
     // Add SugarCube interface for adding recipes
     Macro.add("addRecipe", {
         tags: [],
@@ -1140,7 +1147,7 @@ const MaterialManager = (function() {
             let args = this.args;
             if (args[args.length - 1] === "JS") {
                 args.pop();
-                MaterialManager.addRecipeJS(args, createSafetyWrapper(args, Function("materials", this.payload[0].contents)));
+                MaterialManager.addRecipe(args, Function("materials", this.payload[0].contents));
             } else {
                 const callback = function(materials) {
                     let tempMaterials;
@@ -1173,7 +1180,7 @@ const MaterialManager = (function() {
                     return results;
                 }
 
-                MaterialManager.addRecipe(args, createSafetyWrapper(args, callback));
+                MaterialManager.addRecipe(args, callback);
             }
         }
     });
