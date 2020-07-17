@@ -61,10 +61,10 @@ const EventDispatcher = (function(){
      * @return				The EventDispatcher object
      */
     const populate = function(config) {
-        if (!states[this.getKey()]) {
+        if (!states[this.key]) {
             // Create internal object state
             const state = Object.create(null);
-            states[this.getKey()] = state;
+            states[this.key] = state;
             
             state.eventNames = config.eventNames;
             state.callbacks = Object.create(null);
@@ -101,13 +101,13 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.defineEvents = function(eventNames) {
         // Retrieve internal state
-        const state = states[this.getKey()];
+        const state = states[this.key];
         const callbacks = state.callbacks;
         
         // Add event name arrays to callback object
         eventNames.forEach(function(eventName) {
             if (!callbacks[eventName]) {
-                callbacks[eventName] = [];
+                callbacks[eventName] = new Set();
             }
         });	
     }
@@ -119,7 +119,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.dispatchEvent = function(LEvent) {
         // Retrieve internal state
-        const state = states[this.getKey()];
+        const state = states[this.key];
         const callbacks = state.callbacks;
         
         // Retrieve event name
@@ -142,7 +142,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.addEventListener = function(eventName, callback) {
         // Retrieve internal state
-        const state = states[this.getKey()];
+        const state = states[this.key];
         const callbacks = state.callbacks;
         
         // Input validation
@@ -150,7 +150,7 @@ const EventDispatcher = (function(){
         
         // Add callback
         if (callbacks[eventName]) {
-            callbacks[eventName].push(callback);
+            callbacks[eventName].add(callback);
         }
     }
     
@@ -162,17 +162,14 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.removeEventListener = function(eventName, callback) {
         // Retrieve internal state
-        const state = states[this.getKey()];
+        const state = states[this.key];
         const callbacks = state.callbacks;
         
         // Input validation
         if (!callback) throw new Error("A callback function must be provided");
-        let callbackIndex = callbacks[eventName].indexOf(callback);
         
         // Remove callback
-        if (callbackIndex !== -1) {
-            callbacks[eventName].splice(callbackIndex, 1);
-        }
+        callbacks[eventName].delete(callback);
     }
     
     /**
@@ -184,7 +181,7 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.getEventListeners = function(eventName) {
         // Retrieve internal state
-        return states[this.getKey()].callbacks[eventName];
+        return states[this.key].callbacks[eventName];
     }
     
     /**
@@ -194,16 +191,34 @@ const EventDispatcher = (function(){
      */
     EventDispatcher.prototype.getEventNames = function() {
         // Retrieve internal state
-        return states[this.getKey()].eventNames;
+        return states[this.key].eventNames;
     }
 
     EventDispatcher.prototype.hasEvent = function(eventName) {
-        return Boolean(states[this.getKey()].callbacks[eventName]);
+        return Boolean(states[this.key].callbacks[eventName]);
+    }
+
+    const contentMap = Object.create(null);
+    const hasContent = function(obj, content) {
+        const contents = contentMap[obj.key];
+        if (!contents) {
+            return false;
+        }
+        return contents.has(content);
+    }
+    const addContent = function(obj, content) {
+        let contents = contentMap[obj.key];
+        if (!contents) {
+            contents = contentMap[obj.key] = new Set();
+        }
+        contents.add(content);
     }
 
     Macro.add("on", {
-        tags: [],
+        tags: null,
         handler() {
+            const that = this;
+
             // Find first macro context whose first argument is an EventDispatcher
             const eventContext = this.contextSelect(function(context) {
                 return context.args[0] && context.args[0].addEventListener === EventDispatcher.prototype.addEventListener;
@@ -211,25 +226,35 @@ const EventDispatcher = (function(){
 
             // Make sure eventContext is not null
             if (eventContext === null) {
-                throw new Error("'on' macro must have a parent context whose first argument is an instance of EventDispatcher");
+                that.error("'on' macro must have a parent context whose first argument is an instance of EventDispatcher");
             }
             const parentObject = eventContext.args[0];
 
-            // Check if the instance of EventDispatcher has the given event name
-            const eventName = String(this.args[0]);
-            if (!parentObject.hasEvent(eventName)) {
-                throw new Error("Parent object does not have an event named " + eventName);
+            // Determine whether the callback should be run as javascript
+            let isJS = false;
+            if (this.args[this.args.length - 1] === "JS") {
+                isJS = true;
+                this.args.pop();
             }
 
+            // Check if the instance of EventDispatcher has the given event names
+            const eventNames = this.args.map(function(arg) {
+                if (typeof arg !== "string") {
+                    that.error("Argument must be a string");
+                } else if (!parentObject.hasEvent(arg)) {
+                    that.error("Parent object does not have an event names " + eventName);
+                }
+                return arg;
+            });
+
             // Create and add callback function
-            const that = this;
-            const isJS = this.args[1] === "JS";
-            let callback;
-            if (isJS) {
-                callback = Function("event", this.payload[0].contents);
-            } else {
-                let content = this.payload[0].contents.trim();
-                if (content !== "") {
+            const content = this.payload[0].contents.trim();
+            if (content !== "" && !hasContent(parentObject, content)) {
+                addContent(parentObject, content);
+                let callback;
+                if (isJS) {
+                    callback = Function("event", content);
+                } else {
                     this.addShadow("$event");
                     callback = this.createShadowWrapper(function(event) {
                         const eventCache = State.variables.event;
@@ -242,9 +267,9 @@ const EventDispatcher = (function(){
                         }
                     });
                 }
-            }
-            if (callback) {
-                parentObject.addEventListener(eventName, callback);
+                eventNames.forEach(function(eventName) {
+                    parentObject.addEventListener(eventName, callback);
+                });
             }
         }
     });
@@ -480,7 +505,7 @@ const EquipmentContainer = (function() {
         if (this.singleItem && this.contents.length > 0) {
             this.removeAll();
         }
-        this.contents.push(item.getKey());
+        this.contents.push(item.key);
 
         const e = Object.create(null);
         e.parent = this;
@@ -489,7 +514,7 @@ const EquipmentContainer = (function() {
     }
 
     EquipmentContainer.prototype.indexOf = function(item) {
-        return this.contents.indexOf(item.getKey());
+        return this.contents.indexOf(item.key);
     }
 
     EquipmentContainer.prototype.remove = function(item) {
@@ -591,7 +616,69 @@ const Balance = (function() {
         e.parent = this;
         e.offset = this.offset;
         this.dispatchEvent(LEvent("zero", e));
-	}
+    }
+
+    Balance.prototype.updateContentsDisplays = function() {
+        const that = this;
+        const contentDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_contents_display`);
+        contentDisplays.forEach(function(contentDisplay) {
+            jQuery(contentDisplay).empty();
+            jQuery(contentDisplay).wiki(`
+                <<if $${that.key}.contents.length === 0>>
+                    There is currently nothing on the ${that.displayName}
+                <<else>>
+                    The ${that.displayName} has on it:<br>
+                <</if>>
+                <<for _i = 0; _i < $${that.key}.contents.length; _i++>>
+                    <<capture _i>>
+                        <p class="in"><<= $${that.key}.get(_i).displayName>> - <<link "remove">><<run $${that.key}.removeIndex(_i)>><</link>></p>
+                    <</capture>>
+                <</for>>
+            `.replace(/\r?\n|\r/g, ""));
+        });
+    }
+    const updateContentsDisplaysCallback = function(e) {
+        e.parent.updateContentsDisplays();
+    }
+
+    Balance.prototype.updateMeasurementDisplays = function() {
+        const that = this;
+        const measurementDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_measurement_display`);
+        measurementDisplays.forEach(function(measurementDisplay) {
+            jQuery(measurementDisplay).html(that.measureMass());
+        });
+    }
+    const updateMeasurementDisplaysCallback = function(e) {
+        e.parent.updateMeasurementDisplays();
+    }
+
+    Balance.prototype.updateAddOptionDisplays = function() {
+        const that = this;
+        const addOptionDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_add_option_display`);
+        console.log("Updating add option displays");
+        addOptionDisplays.forEach(function(addOptionDisplay) {
+            const objectToAdd = addOptionDisplay.objectToAdd || "";
+            const addPassage = addOptionDisplay.addPassage || "";
+            const removePassage = addOptionDisplay.removePassage;
+            jQuery(addOptionDisplay).empty();
+            if (that.indexOf(addOptionDisplay.objectToAdd) === -1) {
+                jQuery(addOptionDisplay).wiki(`
+                    <<link "Place ${objectToAdd.displayName} on ${that.displayName}" ${addPassage}>>
+                        <<run $${that.key}.add($${objectToAdd.key})>>
+                    <</link>>
+                `.replace(/\r?\n|\r/g, ""));
+            } else {
+                jQuery(addOptionDisplay).wiki(`
+                    <<link "Remove ${objectToAdd.displayName} from ${that.displayName}" ${removePassage}>>
+                        <<run $${that.key}.remove($${objectToAdd.key})>>
+                    <</link>>
+                `.replace(/\r?\n|\r/g, ""));
+            }
+        });
+    }
+    const updateAddOptionDisplaysCallback = function(e) {
+        e.parent.updateAddOptionDisplays();
+    }
 
     Balance.fromObj = function(obj) {
         if (this === Balance) {
@@ -607,13 +694,14 @@ const Balance = (function() {
         config.decimalPlaces = obj.decimalPlaces;
         populate.call(this, config);
     }
-
+    
     Macro.add("balance", {
-        tags: ["offset", "singleItem", "decimalPlaces", "displayName", "displayContents"],
+        tags: ["offset", "singleItem", "decimalPlaces", "displayName", "displayContents", "displayMeasurement", "displayAddOption"],
         handler() {
-            console.log(this);
-            if (this.args.length !== 1) {
-                throw new Error("Balance macro requires a single argument");
+            const that = this;
+            //console.log(this);
+            if (this.args.length < 1) {
+                throw new Error("Missing Balance instance");
             }
             let parentObject = this.args[0];
             if (!parentObject) {
@@ -624,7 +712,6 @@ const Balance = (function() {
                     throw new Error("Argument must be an instance of Balance");
                 }
             }
-            let that = this;
             this.payload.forEach(function(chunk) {
                 if (chunk.name === "offset") {
                     parentObject.offset = Number(chunk.args[0]);
@@ -634,6 +721,40 @@ const Balance = (function() {
                     parentObject.decimalPlaces = Number(chunk.args[0]);
                 } else if (chunk.name === "displayName") {
                     parentObject.displayName = String(chunk.args[0]);
+                } else if (chunk.name === "displayContents") {
+                    const contentsDisplay = document.createElement("div");
+                    contentsDisplay.className = parentObject.key + "_contents_display";
+                    jQuery(that.output).append(contentsDisplay);
+                    $(document).on(":passagedisplay", function(e) {
+                        parentObject.updateContentsDisplays();
+                    });
+                    parentObject.addEventListener("itemadded", updateContentsDisplaysCallback);
+                    parentObject.addEventListener("itemremoved", updateContentsDisplaysCallback);
+                } else if (chunk.name === "displayMeasurement") {
+                    const measurementDisplay = document.createElement("span");
+                    measurementDisplay.className = parentObject.key + "_measurement_display";
+                    jQuery(that.output).append(measurementDisplay);
+                    $(document).on(":passagedisplay", function(e) {
+                        parentObject.updateMeasurementDisplays();
+                    });
+                    parentObject.addEventListener("itemadded", updateMeasurementDisplaysCallback);
+                    parentObject.addEventListener("itemremoved", updateMeasurementDisplaysCallback);
+                    parentObject.addEventListener("zero", updateMeasurementDisplaysCallback);
+                } else if (chunk.name === "displayAddOption") {
+                    const objectToAdd = chunk.args[0];
+                    const addPassage = chunk.args[1] ? chunk.args[1] : "";
+                    const removePassage = chunk.args[2] ? chunk.args[2] : "";
+                    const addOptionDisplay = document.createElement("span");
+                    addOptionDisplay.className = parentObject.key + "_add_option_display";
+                    addOptionDisplay.objectToAdd = objectToAdd;
+                    addOptionDisplay.addPassage = addPassage;
+                    addOptionDisplay.removePassage = removePassage;
+                    jQuery(that.output).append(addOptionDisplay);
+                    $(document).on(":passagedisplay", function(e) {
+                        parentObject.updateAddOptionDisplays();
+                    });
+                    parentObject.addEventListener("itemadded", updateAddOptionDisplaysCallback);
+                    parentObject.addEventListener("itemremoved", updateAddOptionDisplaysCallback);
                 }
                 jQuery(that.output).wiki(chunk.contents);
             });
@@ -798,9 +919,10 @@ const MaterialContainer = (function() {
     Macro.add("container", {
         tags: ["restMass", "capacity", "displayName", "addMaterial", "emptyInto"],
         handler() {
-            console.log(this);
-            if (this.args.length !== 1) {
-                throw new Error("Container macro requires a single argument");
+            const that = this;
+            //console.log(this);
+            if (this.args.length < 1) {
+                throw new Error("Missing MaterialContainer instance");
             }
             let parentObject = this.args[0];
             if (!parentObject) {
@@ -811,7 +933,6 @@ const MaterialContainer = (function() {
                     throw new Error("Argument must be an instance of MaterialContainer");
                 }
             }
-            let that = this;
             this.payload.forEach(function(chunk) {
                 if (chunk.name === "restMass") {
                     parentObject.restMass = Number(chunk.args[0]);
@@ -840,9 +961,9 @@ const GraduatedCylinder = (function() {
     const states = Object.create(null);
     
     const populate = function(config) {
-        if (!states[this.getKey()]) {
+        if (!states[this.key]) {
             const state = Object.create(null);
-            states[this.getKey()] = state;
+            states[this.key] = state;
         }
     }
 
@@ -1140,24 +1261,24 @@ const MaterialManager = (function() {
             }
         });
 
-        console.log("Combine like result", result);
-
         return result;
     }
 
     // Add SugarCube interface for adding recipes
     Macro.add("addRecipe", {
-        tags: [],
+        tags: null,
         handler() {
-            console.log(this);
+            //console.log(this);
             const that = this;
             const args = this.args;
-            if (args[args.length - 1] === "JS") {
-                args.pop();
-                MaterialManager.addRecipe(args, Function("materials", this.payload[0].contents));
-            } else {
-                const content = this.payload[0].contents.trim();
-                if (content !== "") {
+            const content = this.payload[0].contents.trim();
+            if (content !== "") {
+                // Create callback recipe function
+                let callback;
+                if (args[args.length - 1] === "JS") {
+                    args.pop();
+                    callback = Function("materials", content);
+                } else {
                     this.addShadow("$reactants", "$products");
                     let reactantsCache;
                     let productsCache;
@@ -1168,7 +1289,7 @@ const MaterialManager = (function() {
                         State.variables.products = [];
                         Wikifier.wikifyEval(content);
                     });
-                    const callback = function(reactants) {
+                    callback = function(reactants) {
                         shadowWrapped(reactants);
                         const products = State.variables.products;
                         if (reactantsCache !== undefined) {
@@ -1185,6 +1306,13 @@ const MaterialManager = (function() {
                     }
                     MaterialManager.addRecipe(args, callback);
                 }
+
+                // Add recipe
+                try {
+                    MaterialManager.addRecipe(args, callback);
+                } catch(e) {
+                    this.error(e);
+                }
             }
         }
     });
@@ -1194,3 +1322,120 @@ const MaterialManager = (function() {
 
 window.MaterialManager = MaterialManager;
 window.Material = Material;
+
+// Callback macros
+(function() {
+    const triggerCallbacks = function(ids, args) {
+        const store = State.temporary["_callbacks"];
+        if (store) {
+            if (typeof ids === "string") {
+                ids = [ids];
+            }
+            ids.forEach(function(id) {
+                if (store[id]) {
+                    store[id].forEach(function(callback) {
+                        try {
+                            callback(args);
+                        } catch(e) {
+                            console.log(e);
+                        }
+                    });
+                }
+            })
+        }
+    }
+
+    /* SugarCube code block to be executed later */
+    Macro.add("callback", {
+        tags: null,
+        isAsync: true,
+        validIdRe: /^[A-Za-z_]\w*$/,
+        handler() {
+            // Make sure arguments are given
+            if (this.args.length === 0) {
+                return this.error("Missing callback ID(s).");
+            }
+
+            // Determine whether to run the callback as javascript
+            let isJS = false;
+            if (this.args[this.args.length] === "JS") {
+                isJS = true;
+                this.args.pop();
+            }
+
+            // Check callback IDs
+            const ids = Array.from(this.args);
+            const wrongId = ids.find((id) => typeof id !== "string" || !id.match(this.self.validIdRe))
+            if (!!wrongId) {
+                return this.error("The value " + JSON.stringify(wrongId) + " isn't a valid ID.");
+            }
+            
+            // Create callback function and store it in a temporary variable
+            const content = this.payload[0].contents.trim();
+            if (content !== "") {
+                // Create callback
+                let callback;
+                if (isJS) {
+                    callback = Function("args", content);
+                } else {
+                    this.addShadow("$args");
+                    callback = this.createShadowWrapper(function(args) {
+                        const argsCache = State.variables.args;
+                        State.variables.args = args;
+                        Wikifier.wikifyEval(content);
+                        if (argsCache !== undefined) {
+                            State.variables.args = argsCache;
+                        } else {
+                            delete State.variables.args;
+                        }
+                    });
+                }
+
+                // Add callback to store
+                const store = State.temporary["_callbacks"] = State.temporary["_callbacks"] || {};
+                ids.forEach((id) => {
+                    if(!store[id]) {
+                        store[id] = [];
+                    }
+                    store[id].push(callback);
+                });
+            }
+        }
+    });
+
+    /* trigger some handler from before */
+    Macro.add("trigger", {
+        validIdRe: /^[A-Za-z_]\w*$/,
+        handler() {
+            if (this.args.length === 0) {
+                return this.error("Missing callback ID(s).");
+            }
+            const ids = (this.args[0] instanceof Array ? this.args[0].map((id) => String(id)) : [String(this.args[0])]);
+            const wrongId = ids.find((id) => typeof id !== 'string' || !id.match(this.self.validIdRe))
+            if (!!wrongId) {
+                return this.error("The value " + JSON.stringify(wrongId) + " isn't a valid ID.");
+            }
+            triggerCallbacks(ids, this.args.slice(1));
+        }
+    });
+})();
+
+// the <<done>> macro, v1.0.1; for SugarCube 2, by chapel
+(function () {
+    // the core function
+    Macro.add("done", {
+        skipArgs: true,
+        tags: null,
+        handler() {        
+            const content = this.payload[0].contents.trim();
+            if (content === "") {
+                return; // bail
+            }
+
+            const that = this;
+            $(document).on(":passagedisplay", function(e) {
+                Wikifier.wikifyEval(content);
+            });
+        }
+    });
+}());
