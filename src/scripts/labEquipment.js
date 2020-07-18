@@ -502,6 +502,7 @@ const EquipmentContainer = (function() {
         if (item.containedIn) {
             SCVariable.getVar(item.containedIn).remove(item);
         }
+        item.containedIn = this.key;
         if (this.singleItem && this.contents.length > 0) {
             this.removeAll();
         }
@@ -622,12 +623,14 @@ const Balance = (function() {
         const that = this;
         const contentDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_contents_display`);
         contentDisplays.forEach(function(contentDisplay) {
+            const emptyText = contentDisplay.emptyText || `There is nothing on the ${that.displayName}`;
+            const notEmptyText = contentDisplay.notEmptyText || `The ${that.displayName} has on it:`;
             jQuery(contentDisplay).empty();
             jQuery(contentDisplay).wiki(`
                 <<if $${that.key}.contents.length === 0>>
-                    There is currently nothing on the ${that.displayName}
+                    ${emptyText}
                 <<else>>
-                    The ${that.displayName} has on it:<br>
+                    ${notEmptyText}<br>
                 <</if>>
                 <<for _i = 0; _i < $${that.key}.contents.length; _i++>>
                     <<capture _i>>
@@ -657,19 +660,21 @@ const Balance = (function() {
         const addOptionDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_add_option_display`);
         console.log("Updating add option displays");
         addOptionDisplays.forEach(function(addOptionDisplay) {
-            const objectToAdd = addOptionDisplay.objectToAdd || "";
+            const objectToAdd = addOptionDisplay.objectToAdd;
             const addPassage = addOptionDisplay.addPassage || "";
-            const removePassage = addOptionDisplay.removePassage;
+            const removePassage = addOptionDisplay.removePassage || "";
+            const addText = addOptionDisplay.addText || `Place ${objectToAdd.displayName} on ${that.displayName}`;
+            const removeText = addOptionDisplay.removeText || `Remove ${objectToAdd.displayName} from ${that.displayName}`;
             jQuery(addOptionDisplay).empty();
             if (that.indexOf(addOptionDisplay.objectToAdd) === -1) {
                 jQuery(addOptionDisplay).wiki(`
-                    <<link "Place ${objectToAdd.displayName} on ${that.displayName}" ${addPassage}>>
+                    <<link "${addText}" ${addPassage}>>
                         <<run $${that.key}.add($${objectToAdd.key})>>
                     <</link>>
                 `.replace(/\r?\n|\r/g, ""));
             } else {
                 jQuery(addOptionDisplay).wiki(`
-                    <<link "Remove ${objectToAdd.displayName} from ${that.displayName}" ${removePassage}>>
+                    <<link "${removeText}" ${removePassage}>>
                         <<run $${that.key}.remove($${objectToAdd.key})>>
                     <</link>>
                 `.replace(/\r?\n|\r/g, ""));
@@ -724,6 +729,8 @@ const Balance = (function() {
                 } else if (chunk.name === "displayContents") {
                     const contentsDisplay = document.createElement("div");
                     contentsDisplay.className = parentObject.key + "_contents_display";
+                    contentsDisplay.emptyText = chunk.args[0] ? chunk.args[0] : "";
+                    contentsDisplay.notEmptyText = chunk.args[1] ? chunk.args[1] : "";
                     jQuery(that.output).append(contentsDisplay);
                     $(document).on(":passagedisplay", function(e) {
                         parentObject.updateContentsDisplays();
@@ -741,14 +748,13 @@ const Balance = (function() {
                     parentObject.addEventListener("itemremoved", updateMeasurementDisplaysCallback);
                     parentObject.addEventListener("zero", updateMeasurementDisplaysCallback);
                 } else if (chunk.name === "displayAddOption") {
-                    const objectToAdd = chunk.args[0];
-                    const addPassage = chunk.args[1] ? chunk.args[1] : "";
-                    const removePassage = chunk.args[2] ? chunk.args[2] : "";
                     const addOptionDisplay = document.createElement("span");
                     addOptionDisplay.className = parentObject.key + "_add_option_display";
-                    addOptionDisplay.objectToAdd = objectToAdd;
-                    addOptionDisplay.addPassage = addPassage;
-                    addOptionDisplay.removePassage = removePassage;
+                    addOptionDisplay.objectToAdd = chunk.args[0];
+                    addOptionDisplay.addPassage = chunk.args[1] ? chunk.args[1] : "";
+                    addOptionDisplay.removePassage = chunk.args[2] ? chunk.args[2] : "";
+                    addOptionDisplay.addText = chunk.args[3] ? chunk.args[3] : "";
+                    addOptionDisplay.removeText = chunk.args[4] ? chunk.args[4] : "";
                     jQuery(that.output).append(addOptionDisplay);
                     $(document).on(":passagedisplay", function(e) {
                         parentObject.updateAddOptionDisplays();
@@ -793,8 +799,8 @@ const MaterialContainer = (function() {
     const updateMeasurements = function() {
         let contentMass = 0;
         this.volume = this.contents.reduce(function(volume, material) {
-            contentMass += material.getMass();
-            return volume + material.getVolume();
+            contentMass += material.mass;
+            return volume + material.volume;
         }, 0);
         this.contentMass = contentMass;
     }
@@ -808,7 +814,7 @@ const MaterialContainer = (function() {
      * @param material      The material to add
      */
     MaterialContainer.prototype.add = function(material) {
-        const surplus = (this.volume + material.getVolume()) - this.capacity;
+        const surplus = (this.volume + material.volume) - this.capacity;
         if (surplus > 0) {
             const e = Object.create(null);
             e.parent = this;
@@ -835,26 +841,26 @@ const MaterialContainer = (function() {
         return this.contents.indexOf(material);
     }
 
-    const indexOfLabel = function(label) {
+    const indexOfName = function(name) {
         return this.contents.findIndex(function(material) {
-            return material.label === label;
+            return material.name === name;
         });
     }
 
-    MaterialContainer.prototype.remove = function(label) {
-        var index = indexOfLabel.call(this, label);
+    MaterialContainer.prototype.remove = function(name) {
+        var index = indexOfName.call(this, name);
 		if (index != -1) {
 			return this.removeIndex(index);
 		}
 		return null;
     }
 
-    MaterialContainer.prototype.has = function(label) {
-        return indexOfLabel.call(this, label) !== -1;
+    MaterialContainer.prototype.has = function(name) {
+        return indexOfName.call(this, name) !== -1;
     }
 
-    MaterialContainer.prototype.get = function(label) {
-        const index = indexOfLabel.call(this, label);
+    MaterialContainer.prototype.get = function(name) {
+        const index = indexOfName.call(this, name);
         if (index !== -1) {
             return this.contents[index];
         }
@@ -883,8 +889,8 @@ const MaterialContainer = (function() {
         }
         const materialRemoved = this.contents.splice(index, 1)[0];
         
-        this.volume -= materialRemoved.getVolume();
-        this.contentMass -= materialRemoved.getMass();
+        this.volume -= materialRemoved.volume;
+        this.contentMass -= materialRemoved.mass;
 
         const e = Object.create(null);
         e.parent = this;
@@ -917,7 +923,7 @@ const MaterialContainer = (function() {
     }
 
     Macro.add("container", {
-        tags: ["restMass", "capacity", "displayName", "addMaterial", "emptyInto"],
+        tags: ["restMass", "capacity", "displayName", "displayAddMaterial", "displayEmptyInto"],
         handler() {
             const that = this;
             //console.log(this);
@@ -940,14 +946,6 @@ const MaterialContainer = (function() {
                     parentObject.capacity = Number(chunk.args[0]);
                 } else if (chunk.name === "displayName") {
                     parentObject.displayName = String(chunk.args[0]);
-                } else if (chunk.name === "addMaterial") {
-                    const material = chunk.args[0];
-                    if (!(material instanceof Material)) {
-                        throw new Error("addMaterial argument must be an instance of Material");
-                    }
-                    parentObject.add(material);
-                } else if (chunk.name === "emptyInto") {
-                    parentObject.emptyInto(chunk.args[0]);
                 }
                 jQuery(that.output).wiki(chunk.contents);
             });
@@ -975,19 +973,122 @@ const GraduatedCylinder = (function() {
     GraduatedCylinder.inheritFrom(MaterialContainer);
 })();
 
-const Material = (function() {
-    const populate = function(config) {
-        this.label = config.label;
-        if (config.solid) {
-            this.mass = config.mass;
-        } else {
-            this.volume = config.volume;
+const MaterialDefinition = (function() {
+    const definitions = new Map();
+
+    const MaterialDefinition = function(name, intensiveProperties) {
+        if (!intensiveProperties.density) {
+            throw new Error("Material definition must include a density property");
         }
-        this.density = config.density;
-        this.solid = config.solid;
+        if (!intensiveProperties.state) {
+            throw new Error("Material definition must include a state property");
+        }
+        const definition = Object.create(null);
+        definition.name = name;
+        definition.intensiveProperties = intensiveProperties;
+        definitions.set(name, definition);
     }
 
-    const Material = function(label, volume, density, solid = false) {
+    MaterialDefinition.getDefinition = function(name) {
+        const definition = definitions.get(name);
+        if (!definition) {
+            throw new Error("A material named " + name + " is not defined");
+        }
+        return definition;
+    }
+
+    Macro.add("defineMaterial", {
+        handler() {
+            if (typeof this.args[0] !== "string") {
+                this.error("Missing material name.");
+            } else if (typeof this.args[1] !== "number") {
+                this.error("Missing material density.");
+            } else if (typeof this.args[2] !== "string") {
+                this.error("Missing material state.");
+            } else if (this.args[3] && typeof this.args[3] !== "object") {
+                this.error("Additional intensive property argument must be an object.");
+            } else {
+                if (this.args[2] !== "solid" && this.args[2] !== "liquid") {
+                    this.error("Invalid material state. The supported material states are 'solid' and 'liquid'.");
+                }
+            }
+            const intensiveProperties = this.args[3] || {};
+            intensiveProperties.density = this.args[1];
+            intensiveProperties.state = this.args[2];
+            MaterialDefinition(this.args[0], intensiveProperties);
+        }
+    });
+
+    return MaterialDefinition;
+})();
+window.MaterialDefinition = MaterialDefinition;
+
+const Material = (function() {
+    const populate = function(config) {
+        const definition = MaterialDefinition.getDefinition(config.name);
+        this.name = config.name;
+        this.extensiveProperties = config.extensiveProperties;
+        Object.defineProperties(this, {
+            state: {
+                get() {
+                    return definition.intensiveProperties.state;
+                }
+            },
+            density: {
+                get() {
+                    return definition.intensiveProperties.density;
+                }
+            },
+            intensiveProperties: {
+                get() {
+                    return definition.intensiveProperties;
+                }
+            },
+        });
+        if (definition.intensiveProperties.state === "solid") {
+            this.extensiveProperties.mass = config.amount;
+            Object.defineProperties(this, {
+                mass: {
+                    get() {
+                        return this.extensiveProperties.mass;
+                    },
+                    set(newMass) {
+                        this.extensiveProperties.mass = newMass;
+                    }
+                },
+                volume: {
+                    get() {
+                        return this.extensiveProperties.mass / this.density;
+                    },
+                    set(newVolume) {
+                        this.extensiveProperties.mass = newVolume * this.density;
+                    }
+                }
+            });
+        } else if (definition.intensiveProperties.state === "liquid") {
+            this.extensiveProperties.volume = config.amount;
+            Object.defineProperties(this, {
+                volume: {
+                    get() {
+                        return this.extensiveProperties.volume;
+                    },
+                    set(newVolume) {
+                        this.extensiveProperties.volume = newVolume;
+                    }
+                },
+                mass: {
+                    get() {
+                        return this.extensiveProperties.volume * this.density;
+                    },
+                    set(newMass) {
+                        this.extensiveProperties.volume = newMass / this.density;
+                    }
+                }
+            });
+        }
+    }
+
+    const Material = function(name, amount, extensiveProperties = Object.create(null)) {
         if (!this) {
             const material = Object.create(Material.prototype);
             Material.call(material, ...arguments);
@@ -996,29 +1097,21 @@ const Material = (function() {
         Cloneable.call(this);
 
         const config = Object.create(null);
-        config.label = label;
-        if (solid) {
-            config.mass = volume;
-        } else {
-            config.volume = volume;
-        }
-        config.density = density;
-        config.solid = solid;
+        config.name = name;
+        config.amount = amount;
+        config.extensiveProperties = extensiveProperties;
         populate.call(this, config);
     }
     Material.inheritFrom(Cloneable);
     Cloneable.setupConstructor(Material, "Material");
 
     Material.prototype.splitOff = function(percentage) {
-        const newMaterial = Object.create(Material.prototype);
-        Cloneable.call(newMaterial);
-        
-        Object.assign(newMaterial, this);
-        if (this.solid) {
-            newMaterial.mass *= percentage;
+        let newMaterial;
+        if (this.state === "solid") {
+            newMaterial = Material(this.name, this.mass * percentage, clone(this.extensiveProperties));
             this.mass *= (1 - percentage);
-        } else {
-            newMaterial.volume *= percentage;
+        } else if (this.state === "liquid") {
+            newMaterial = Material(this.name, this.volume * percentage, clone(this.extensiveProperties));
             this.volume *= (1 - percentage);
         }
 
@@ -1026,11 +1119,11 @@ const Material = (function() {
     }
 
     Material.prototype.combineLike = function(material) {
-        if (material.label === this.label) {
-            if (this.solid) {
+        if (material.name === this.name) {
+            if (this.state === "solid") {
                 this.mass += material.mass;
                 material.mass = 0;
-            } else {
+            } else if (this.state === "liquid") {
                 this.volume += material.volume;
                 material.volume = 0;
             }
@@ -1038,31 +1131,26 @@ const Material = (function() {
         return this;
     }
 
-    Material.prototype.getMass = function() {
-        if (this.solid) {
-            return this.mass;
-        } else {
-            return this.density * this.volume;
-        }
-    }
-
-    Material.prototype.getVolume = function() {
-        if (this.solid) {
-            return this.mass / this.density;
-        } else {
-            return this.volume;
-        }
+    Material.prototype.toObj = function() {
+        const obj = {};
+        obj.name = this.name;
+        obj.extensiveProperties = cloneKeys(this.extensiveProperties, {});
+        return obj;
     }
 
     Material.fromObj = function(obj) {
         if (this === Material) {
             const material = Object.create(Material.prototype);
-            Object.assign(material, obj);
             Material.fromObj.call(material, obj);
             return material;
         }
         Cloneable.fromObj.call(this, obj);
-        Object.assign(this, obj);
+        
+        const config = Object.create(null);
+        config.name = obj.name;
+        config.amount = obj.extensiveProperties.mass || obj.extensiveProperties.volume;
+        config.extensiveProperties = obj.extensiveProperties;
+        populate.call(this, config);
     }
 
     return Material;
@@ -1072,27 +1160,27 @@ const Material = (function() {
 const MaterialManager = (function() {
     const MaterialManager = Object.create(null);
 
-    const singleLabelRecipes = []; // Array of the recipes with only one label to match
-    const multipleLabelRecipes = []; // Array of the recipes with multiple labels to match
-    const singleLabelMap = new WeakMap(); // A map whose keys are recipes with only one label
-    const multipleLabelMap = new WeakMap(); // A map whose keys are recipes with multiple labels
-    const labelMap = Object.create(null); // An object whose keys are labels and whose values are arrays of recipes with that label
+    const singleNameRecipes = []; // Array of the recipes with only one name to match
+    const multipleNameRecipes = []; // Array of the recipes with multiple names to match
+    const singleNameMap = new WeakMap(); // A map whose keys are recipes with only one name
+    const multipleNameMap = new WeakMap(); // A map whose keys are recipes with multiple names
+    const nameMap = Object.create(null); // An object whose keys are names and whose values are arrays of recipes with that name
 
     // Creates and returns a wrapper function for the given callback that validates the callback's given materials and results
-    const createSafetyWrapper = function(labels, callback) {
+    const createSafetyWrapper = function(names, callback) {
         const wrapper = function(materials) {
-            labels.forEach(function(label, i) {
-                if (label !== materials[i].label) {
-                    throw new Error("The given material does not match the recipe's label!");
+            names.forEach(function(name, i) {
+                if (name !== materials[i].name) {
+                    throw new Error("The given material does not match the recipe's name!");
                 }
             });
             const results = callback(materials);
-            if (labels.length === 1) {
+            if (names.length === 1) {
                 if (results.length > 1) {
                     throw new Error("Multiple materials returned when only one was expected!");
                 }
-                if (labels[0].label === results[0].label) {
-                    throw new Error("A recipe with a single label must return a single material with that same label!");
+                if (names[0].name === results[0].name) {
+                    throw new Error("A recipe with a single name must return a single material with that same name!");
                 }
             }
             return results;
@@ -1103,37 +1191,37 @@ const MaterialManager = (function() {
     /**
      * Creates a recipe used to combine materials
      * 
-     * @param labels       A list of labels to label in order to operate the recipe on
+     * @param names       A list of names to name in order to operate the recipe on
      * @param callback     A string, either javascript or SugarCube script, to evaluate
      */
-    const Recipe = function(labels, callback) {
-        const labelsSeen = Object.create(null);
-        labels.forEach(function(label) {
-            if (typeof label !== "string") {
-                throw new Error("All recipe labels must be strings!");
-            } else if (labelsSeen[label]) {
+    const Recipe = function(names, callback) {
+        const namesSeen = Object.create(null);
+        names.forEach(function(name) {
+            if (typeof name !== "string") {
+                throw new Error("All recipe names must be strings!");
+            } else if (namesSeen[name]) {
                 throw new Error("A recipe cannot match the same material more than once");
             } else {
-                labelsSeen[label] = true;
+                namesSeen[name] = true;
             }
         });
 
         const recipe = Object.create(Recipe.prototype);
-        recipe.labels = labels;
-        recipe.callback = createSafetyWrapper(labels, callback);
+        recipe.names = names;
+        recipe.callback = createSafetyWrapper(names, callback);
 
-        if (recipe.labels.length === 1) {
-            singleLabelRecipes.push(recipe);
-            singleLabelMap.set(recipe, true);
-        } else if (recipe.labels.length > 1) {
-            multipleLabelRecipes.push(recipe);
-            multipleLabelMap.set(recipe, true);
+        if (recipe.names.length === 1) {
+            singleNameRecipes.push(recipe);
+            singleNameMap.set(recipe, true);
+        } else if (recipe.names.length > 1) {
+            multipleNameRecipes.push(recipe);
+            multipleNameMap.set(recipe, true);
         }
-        recipe.labels.forEach(function(label) {
-            if (!labelMap[label]) {
-                labelMap[label] = [];
+        recipe.names.forEach(function(name) {
+            if (!nameMap[name]) {
+                nameMap[name] = [];
             }
-            labelMap[label].push(recipe);
+            nameMap[name].push(recipe);
         });
 
         return recipe;
@@ -1146,11 +1234,11 @@ const MaterialManager = (function() {
     /**
      * Add a recipe to the material manager
      * 
-     * @param labels            An array of material labels to match
+     * @param names            An array of material names to match
      * @param callback          A callback that processes the materials matched
      */
-    MaterialManager.addRecipe = function(labels, callback) {
-        const recipe = Recipe(labels, callback);
+    MaterialManager.addRecipe = function(names, callback) {
+        const recipe = Recipe(names, callback);
     }
 
     /**
@@ -1161,20 +1249,20 @@ const MaterialManager = (function() {
     MaterialManager.evaluateContents = function(contents) {
         let reevaluationRequired = false;
 
-        // Create a map of the contents where the material labels are the keys and the array of materials are the values
+        // Create a map of the contents where the material names are the keys and the array of materials are the values
         const contentMap = Object.create(null);
         contents.forEach(function(material) {
-            const label = material.label;
-            if (!contentMap[label]) {
-                contentMap[label] = [];
+            const name = material.name;
+            if (!contentMap[name]) {
+                contentMap[name] = [];
             }
-            contentMap[label].push(material);
+            contentMap[name].push(material);
         });
 
         // Loop through content map, combining like materials
         // Combining materials does not require another 
-        Object.keys(contentMap).forEach(function(label) {
-            const materials = contentMap[label];
+        Object.keys(contentMap).forEach(function(name) {
+            const materials = contentMap[name];
             let result;
 
             // If there are multiple of the same material, combine them, otherwise, just unwrap the array
@@ -1183,19 +1271,19 @@ const MaterialManager = (function() {
             } else {
                 result = materials[0];
             }
-            contentMap[label] = result;
+            contentMap[name] = result;
         });
 
-        // Loop through all multiple label recipes looking for and evaluating matches
-        multipleLabelRecipes.forEach(function(recipe) {
+        // Loop through all multiple name recipes looking for and evaluating matches
+        multipleNameRecipes.forEach(function(recipe) {
             // Create materials array to pass to the recipe's evaluate function
             const materials = [];
 
             // Check to see if the recipe can be evaluated
-            // It can be evaluated if each label in its label array is found as a property on contentMap
-            const canEvaluate = recipe.labels.every(function(label) {
+            // It can be evaluated if each name in its name array is found as a property on contentMap
+            const canEvaluate = recipe.names.every(function(name) {
                 // Retrieve the material from contentMap, push it to the materials array, and return it
-                const material = contentMap[label];
+                const material = contentMap[name];
                 materials.push(material);
                 return material;
             });
@@ -1205,17 +1293,17 @@ const MaterialManager = (function() {
             if (canEvaluate) {
                 reevaluationRequired = true;
                 let newMaterials = recipe.evaluate(materials);
-                recipe.labels.forEach(function(label) {
-                    delete contentMap[label];
+                recipe.names.forEach(function(name) {
+                    delete contentMap[name];
                 });
                 newMaterials.forEach(function(newMaterial) {
-                    if (newMaterial.getVolume() > 0 || newMaterial.getMass() > 0) {
-                        const label = newMaterial.label;
-                        const existingMaterial = contentMap[label];
+                    if (newMaterial.volume > 0 || newMaterial.mass > 0) {
+                        const name = newMaterial.name;
+                        const existingMaterial = contentMap[name];
                         if (existingMaterial) {
                             newMaterial = combineLike([existingMaterial, newMaterial]);
                         }
-                        contentMap[label] = newMaterial;
+                        contentMap[name] = newMaterial;
                     }
                 });
             }
@@ -1235,19 +1323,19 @@ const MaterialManager = (function() {
     }
 
     /**
-     * Combines an array of like materials (matching labels)
-     * Attempts to find a single label rule to combine the materials
+     * Combines an array of like materials (matching names)
+     * Attempts to find a single name rule to combine the materials
      * If no rule is found, the function defaults to the Material.prototype.combineLike function
      * 
      * @param materials 
      */
     const combineLike = function(materials) {
-        // Find the first single label recipe that matches the label
-        const label = materials[0].label;
+        // Find the first single name recipe that matches the name
+        const name = materials[0].name;
         let recipe;
-        if (labelMap[label]) {
-            recipe = labelMap[label].find(function(recipe) {
-                return singleLabelMap.has(recipe);
+        if (nameMap[name]) {
+            recipe = nameMap[name].find(function(recipe) {
+                return singleNameMap.has(recipe);
             });
         }
 
