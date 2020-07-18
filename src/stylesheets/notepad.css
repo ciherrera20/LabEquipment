@@ -1,0 +1,56 @@
+#notepad {
+    height: 30vh;
+    padding: 0;
+    margin: 0;
+    margin-left: 17.5em;
+    transition: margin-left 200ms ease-in;
+    transition: height 200ms ease-in;
+    display: block;
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    z-index: 50;
+}
+
+#notepad.notransition {
+    transition: none !important;
+}
+
+#ui-bar.stowed ~ #notepad {
+    margin-left: 2em;
+}
+
+#notepad_toggle {
+    width: 100%;
+    height: 35px;
+    padding: 0;
+    border: 0;
+    margin: 0;
+    display: block;
+    font-size: 1.5em;
+    font-weight: bold;
+    background-color: #3b3b3b;
+}
+
+/*#notepad.stowed > #notepad_toggle {
+    background-color: red;
+}*/
+
+#notepad_toggle:hover {
+    cursor: n-resize;
+}
+
+#notepad_textarea {
+    width: 100%;
+    height: calc(100% - 35px);
+    padding: 5;
+    border: 0;
+    margin: 0;
+    display: block;
+    font-size: 1em;
+    resize: none;
+    color: black;
+    outline: none;
+    background-image: repeating-linear-gradient(#9cdfff, #9cdfff 0.5px, white 0px, white 30px);
+}

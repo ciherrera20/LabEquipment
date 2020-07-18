@@ -777,7 +777,7 @@ const MaterialContainer = (function() {
         this.capacity = config.capacity || Infinity;
         this.volume = config.volume || 0;
         this.contentMass = config.contentMass || 0;
-        this.defineEvents(["materialadded", "materialremoved", "emptied", "overflow"]);
+        this.defineEvents(["materialadded", "materialremoved", "materialscombined", "emptied", "overflow"]);
     }
 
     const MaterialContainer = function(key, restMass) {
@@ -825,16 +825,22 @@ const MaterialContainer = (function() {
 
         this.contents.push(material);
 
+        {
+            const e = Object.create(null);
+            e.parent = this;
+            e.materialAdded = material;
+            this.dispatchEvent(LEvent("materialadded", e));
+        }
+
         const e = Object.create(null);
         e.parent = this;
-        e.materialAdded = material;
         e.previousVolume = this.volume;
         e.previousContents = this.contents;
 
         this.contents = MaterialManager.evaluateContents(clone(this.contents));
         updateMeasurements.call(this);
 
-        this.dispatchEvent(LEvent("materialadded", e));
+        this.dispatchEvent(LEvent("materialscombined", e));
     }
 
     MaterialContainer.prototype.indexOf = function(material) {
@@ -977,15 +983,16 @@ const MaterialDefinition = (function() {
     const definitions = new Map();
 
     const MaterialDefinition = function(name, intensiveProperties) {
-        if (!intensiveProperties.density) {
-            throw new Error("Material definition must include a density property");
-        }
-        if (!intensiveProperties.state) {
-            throw new Error("Material definition must include a state property");
-        }
         const definition = Object.create(null);
         definition.name = name;
         definition.intensiveProperties = intensiveProperties;
+        Object.defineProperties(definition, {
+            intProps: {
+                get() {
+                    return this.intensiveProperties;
+                }
+            }
+        });
         definitions.set(name, definition);
     }
 
@@ -1001,20 +1008,10 @@ const MaterialDefinition = (function() {
         handler() {
             if (typeof this.args[0] !== "string") {
                 this.error("Missing material name.");
-            } else if (typeof this.args[1] !== "number") {
-                this.error("Missing material density.");
-            } else if (typeof this.args[2] !== "string") {
-                this.error("Missing material state.");
-            } else if (this.args[3] && typeof this.args[3] !== "object") {
+            } else if (this.args[1] && typeof this.args[1] !== "object") {
                 this.error("Additional intensive property argument must be an object.");
-            } else {
-                if (this.args[2] !== "solid" && this.args[2] !== "liquid") {
-                    this.error("Invalid material state. The supported material states are 'solid' and 'liquid'.");
-                }
             }
-            const intensiveProperties = this.args[3] || {};
-            intensiveProperties.density = this.args[1];
-            intensiveProperties.state = this.args[2];
+            const intensiveProperties = this.args[1] || {};
             MaterialDefinition(this.args[0], intensiveProperties);
         }
     });
@@ -1028,67 +1025,71 @@ const Material = (function() {
         const definition = MaterialDefinition.getDefinition(config.name);
         this.name = config.name;
         this.extensiveProperties = config.extensiveProperties;
+        this.attributes = config.attributes;
         Object.defineProperties(this, {
-            state: {
-                get() {
-                    return definition.intensiveProperties.state;
-                }
-            },
-            density: {
-                get() {
-                    return definition.intensiveProperties.density;
-                }
-            },
             intensiveProperties: {
                 get() {
                     return definition.intensiveProperties;
                 }
             },
-        });
-        if (definition.intensiveProperties.state === "solid") {
-            this.extensiveProperties.mass = config.amount;
-            Object.defineProperties(this, {
-                mass: {
-                    get() {
+            intProps: {
+                get() {
+                    return definition.intensiveProperties;
+                }
+            },
+            extProps: {
+                get() {
+                    return this.extensiveProperties;
+                }
+            },
+            mass: {
+                // Gets mass if the property exists. If only density and volume exist, return a calculated mass. If none exist, return 0
+                get() {
+                    if (this.extensiveProperties.mass) {
                         return this.extensiveProperties.mass;
-                    },
-                    set(newMass) {
-                        this.extensiveProperties.mass = newMass;
+                    } else if (this.extensiveProperties.volume && definition.intensiveProperties.density) {
+                        return this.extensiveProperties.volume * definition.intensiveProperties.density;
+                    } else {
+                        return 0;
                     }
                 },
-                volume: {
-                    get() {
-                        return this.extensiveProperties.mass / this.density;
-                    },
-                    set(newVolume) {
-                        this.extensiveProperties.mass = newVolume * this.density;
+                // Sets mass if the property exists. If only density and volume exist, set a calculated volume. If none exist, set mass
+                set(mass) {
+                    if (this.extensiveProperties.mass) {
+                        this.extensiveProperties.mass = mass;
+                    } else if (this.extensiveProperties.volume && definition.intensiveProperties.density) {
+                        this.extensiveProperties.volume = mass / definition.intensiveProperties.density;
+                    } else {
+                        this.extensiveProperties.mass = mass;
                     }
                 }
-            });
-        } else if (definition.intensiveProperties.state === "liquid") {
-            this.extensiveProperties.volume = config.amount;
-            Object.defineProperties(this, {
-                volume: {
-                    get() {
+            },
+            volume: {
+                // Gets volume if the property exists. If only density and mass exist, return a calculated volume. If none exist, return 0
+                get() {
+                    if (this.extensiveProperties.volume) {
                         return this.extensiveProperties.volume;
-                    },
-                    set(newVolume) {
-                        this.extensiveProperties.volume = newVolume;
+                    } else if (this.extensiveProperties.mass && definition.intensiveProperties.density) {
+                        return this.extensiveProperties.mass / definition.intensiveProperties.density;
+                    } else {
+                        return 0;
                     }
                 },
-                mass: {
-                    get() {
-                        return this.extensiveProperties.volume * this.density;
-                    },
-                    set(newMass) {
-                        this.extensiveProperties.volume = newMass / this.density;
+                // Sets volume if the property exists. If only density and mass exist, set a calculated mass. If none exist, set volume
+                set(volume) {
+                    if (this.extensiveProperties.volume) {
+                        this.extensiveProperties.volume = volume;
+                    } else if (this.extensiveProperties.volume && definition.intensiveProperties.density) {
+                        this.extensiveProperties.mass = volume * definition.intensiveProperties.density;
+                    } else {
+                        this.extensiveProperties.volume = volume;
                     }
                 }
-            });
-        }
+            }
+        });
     }
 
-    const Material = function(name, amount, extensiveProperties = Object.create(null)) {
+    const Material = function(name, extensiveProperties = Object.create(null), attributes = Object.create(null)) {
         if (!this) {
             const material = Object.create(Material.prototype);
             Material.call(material, ...arguments);
@@ -1098,35 +1099,30 @@ const Material = (function() {
 
         const config = Object.create(null);
         config.name = name;
-        config.amount = amount;
         config.extensiveProperties = extensiveProperties;
+        config.attributes = attributes;
         populate.call(this, config);
     }
     Material.inheritFrom(Cloneable);
     Cloneable.setupConstructor(Material, "Material");
 
     Material.prototype.splitOff = function(percentage) {
-        let newMaterial;
-        if (this.state === "solid") {
-            newMaterial = Material(this.name, this.mass * percentage, clone(this.extensiveProperties));
-            this.mass *= (1 - percentage);
-        } else if (this.state === "liquid") {
-            newMaterial = Material(this.name, this.volume * percentage, clone(this.extensiveProperties));
-            this.volume *= (1 - percentage);
-        }
-
+        const that = this;
+        const newMaterial = Material(this.name, clone(this.extensiveProperties), clone(this.attributes));
+        Object.keys(newMaterial.extensiveProperties).forEach(function(key) {
+            newMaterial.extensiveProperties[key] *= percentage;
+            that.extensiveProperties[key] *= (1 - percentage);
+        });
         return newMaterial;
     }
 
     Material.prototype.combineLike = function(material) {
+        const that = this;
         if (material.name === this.name) {
-            if (this.state === "solid") {
-                this.mass += material.mass;
-                material.mass = 0;
-            } else if (this.state === "liquid") {
-                this.volume += material.volume;
-                material.volume = 0;
-            }
+            Object.keys(material.extensiveProperties).forEach(function(key) {
+                that.extensiveProperties[key] += material.extensiveProperties[key];
+                material.extensiveProperties[key] = 0;
+            });
         }
         return this;
     }
@@ -1134,7 +1130,8 @@ const Material = (function() {
     Material.prototype.toObj = function() {
         const obj = {};
         obj.name = this.name;
-        obj.extensiveProperties = cloneKeys(this.extensiveProperties, {});
+        obj.extensiveProperties = this.extensiveProperties;
+        obj.attributes = this.attributes;
         return obj;
     }
 
@@ -1148,8 +1145,8 @@ const Material = (function() {
         
         const config = Object.create(null);
         config.name = obj.name;
-        config.amount = obj.extensiveProperties.mass || obj.extensiveProperties.volume;
-        config.extensiveProperties = obj.extensiveProperties;
+        config.extensiveProperties = clone(obj.extensiveProperties);
+        config.attributes = clone(obj.attributes);
         populate.call(this, config);
     }
 
