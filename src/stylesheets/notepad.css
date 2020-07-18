@@ -1,11 +1,11 @@
 #notepad {
-    height: 30vh;
     padding: 0;
     margin: 0;
     margin-left: 17.5em;
-    transition: margin-left 200ms ease-in;
-    transition: height 200ms ease-in;
-    display: block;
+    transition: margin-left 200ms ease-in, height 200ms ease-in;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     position: fixed;
     bottom: 0;
     right: 0;
@@ -14,7 +14,7 @@
 }
 
 #notepad.notransition {
-    transition: none !important;
+    transition: margin-left 200ms ease-in;
 }
 
 #ui-bar.stowed ~ #notepad {
@@ -27,24 +27,43 @@
     padding: 0;
     border: 0;
     margin: 0;
-    display: block;
     font-size: 1.5em;
     font-weight: bold;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: #3b3b3b;
 }
-
-/*#notepad.stowed > #notepad_toggle {
-    background-color: red;
-}*/
 
 #notepad_toggle:hover {
     cursor: n-resize;
 }
 
+#notepad_arrow {
+    position: absolute;
+    left: calc(50% - 10px);
+    top: 35px;
+    margin: 0;
+    padding: 0;
+    width: 0;
+    height: 0;
+    border-top: 10px solid #3b3b3b;
+    border-bottom: 0px solid transparent;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+}
+
+#notepad.stowed > #notepad_arrow {
+    border-top: 0px solid transparent;
+    border-bottom: 10px solid #3b3b3b;
+    top: -10px;
+}
+
 #notepad_textarea {
-    width: 100%;
+    width: calc(100% - 10px);
     height: calc(100% - 35px);
-    padding: 5;
+    padding: 10px 0px 10px 10px;
     border: 0;
     margin: 0;
     display: block;
@@ -52,5 +71,19 @@
     resize: none;
     color: black;
     outline: none;
+    cursor: context-menu;
     background-image: repeating-linear-gradient(#9cdfff, #9cdfff 0.5px, white 0px, white 30px);
+    background-attachment: local;
+}
+
+#notepad_textarea::-webkit-scrollbar {
+    width: 10px;
+}
+
+#notepad_textarea::-webkit-scrollbar-track {
+    background: #ccc;
+}
+
+#notepad_textarea::-webkit-scrollbar-thumb {
+    background: #888;
 }

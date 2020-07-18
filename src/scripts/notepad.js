@@ -1,48 +1,65 @@
 const notepad = (function() {
+    const defaultHeight = window.innerHeight * 0.3;
+    const notepadData = recall("notepadData") || {contents: "", stowed: true, unstowedHeight: defaultHeight};
+
     const notepad = document.createElement("div");
     notepad.id = "notepad";
+    notepad.classList.add("unstowed");
 
-    const notepadToggle = document.createElement("button");
+    const notepadToggle = document.createElement("div");
     notepadToggle.id = "notepad_toggle";
-    notepadToggle.innerText = "Notes";
+
+    const notepadArrow = document.createElement("div");
+    notepadArrow.id = "notepad_arrow";
+
+    const notepadLabel = document.createElement("span");
+    notepadLabel.id = "notepad_label";
+    notepadLabel.innerText = "Notes";
 
     const notepadTextarea = document.createElement("textarea");
     notepadTextarea.id = "notepad_textarea";
-    notepadTextarea.value = recall("notes") || "";
+    notepadTextarea.value = notepadData.contents;
 
+    notepad.appendChild(notepadArrow);
     notepad.appendChild(notepadToggle);
+    notepadToggle.appendChild(notepadLabel);
     notepad.appendChild(notepadTextarea);
 
-    const defaultHeight = window.innerHeight * 0.3;
-    let stowed = false;
-    let unstowedHeight = defaultHeight;
+    let offsetY = 0;
 
     function stow() {
         notepad.style.height = "35px";
-        stowed = true;
+        notepadData.stowed = true;
+        notepad.classList.remove("unstowed");
         notepad.classList.add("stowed");
+    }
+    if (notepadData.stowed) {
+        stow();
+    } else {
+        notepad.style.height = notepadData.unstowedHeight + "px";
     }
 
     function unstow() {
-        notepad.style.height = unstowedHeight + "px";
-        stowed = false;
+        notepad.style.height = notepadData.unstowedHeight + "px";
+        notepadData.stowed = false;
         notepad.classList.remove("stowed");
+        notepad.classList.add("unstowed");
     }
 
     function resize(e) {
         if (!notepad.classList.contains("notransition")) {
             notepad.classList.add("notransition");
         }
-        if (stowed) {
+        if (notepadData.stowed) {
             unstow();
         }
-        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - e.pageY, 35), window.innerHeight);
-        if (newHeight < 10) {
-            unstowedHeight = defaultHeight;
+        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - e.pageY + offsetY, 35), window.innerHeight);
+        if (newHeight < 45) {
+            notepadData.unstowedHeight = defaultHeight;
             stow();
         } else {
             notepad.style.height = newHeight + "px";
-            unstowedHeight = Math.max(newHeight, defaultHeight);
+            notepadData.unstowedHeight = Math.max(newHeight, defaultHeight);
         }
     }
 
@@ -50,7 +67,7 @@ const notepad = (function() {
         if (notepad.classList.contains("notransition")) {
             notepad.classList.remove("notransition");
         } else {
-            if (stowed) {
+            if (notepadData.stowed) {
                 unstow();
             } else {
                 stow();
@@ -61,6 +78,7 @@ const notepad = (function() {
     }
 
     notepadToggle.addEventListener("mousedown", function(e) {
+        offsetY = e.offsetY;
         window.addEventListener("mousemove", resize);
         window.addEventListener("mouseup", mouseup);
     }, false);
@@ -68,12 +86,15 @@ const notepad = (function() {
     document.body.appendChild(notepad);
 
     window.addEventListener("beforeunload", function() {
-        memorize("notes", notepadTextarea.value);
+        notepadData.contents = notepadTextarea.value;
+        memorize("notepadData", notepadData);
     });
 
     $(document).on(":enginerestart", function() {
-        forget("notes");
+        forget("notepadData");
         notepadTextarea.value = "";
+        notepadData.unstowedHeight = defaultHeight;
+        stow();
     });
 
     return notepad;

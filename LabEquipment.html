@@ -100,15 +100,14 @@ var saveAs=saveAs||navigator.msSaveBlob&&navigator.msSaveBlob.bind(navigator)||f
 		<div id="init-lacking">Your browser lacks required capabilities. Please upgrade it or switch to another to continue.</div>
 		<div id="init-loading"><div>Loading&hellip;</div></div>
 	</div>
-	<!-- UUID://B06965B9-64DB-43A6-A77B-40CFD8C5816F// --><tw-storydata name="Lab Equipment" startnode="3" creator="Tweego" creator-version="2.1.1+81d1d71" ifid="B06965B9-64DB-43A6-A77B-40CFD8C5816F" zoom="1" format="SugarCube" format-version="2.30.0" options="debug" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">/* twine-user-stylesheet #1: "notepad.css" */
-#notepad {
-    height: 30vh;
+	<!-- UUID://B06965B9-64DB-43A6-A77B-40CFD8C5816F// --><tw-storydata name="Lab Equipment" startnode="3" creator="Tweego" creator-version="2.1.1+81d1d71" ifid="B06965B9-64DB-43A6-A77B-40CFD8C5816F" zoom="1" format="SugarCube" format-version="2.30.0" options="" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">#notepad {
     padding: 0;
     margin: 0;
     margin-left: 17.5em;
-    transition: margin-left 200ms ease-in;
-    transition: height 200ms ease-in;
-    display: block;
+    transition: margin-left 200ms ease-in, height 200ms ease-in;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     position: fixed;
     bottom: 0;
     right: 0;
@@ -117,7 +116,7 @@ var saveAs=saveAs||navigator.msSaveBlob&&navigator.msSaveBlob.bind(navigator)||f
 }
 
 #notepad.notransition {
-    transition: none !important;
+    transition: margin-left 200ms ease-in;
 }
 
 #ui-bar.stowed ~ #notepad {
@@ -130,24 +129,43 @@ var saveAs=saveAs||navigator.msSaveBlob&&navigator.msSaveBlob.bind(navigator)||f
     padding: 0;
     border: 0;
     margin: 0;
-    display: block;
     font-size: 1.5em;
     font-weight: bold;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: #3b3b3b;
 }
-
-/*#notepad.stowed > #notepad_toggle {
-    background-color: red;
-}*/
 
 #notepad_toggle:hover {
     cursor: n-resize;
 }
 
+#notepad_arrow {
+    position: absolute;
+    left: calc(50% - 10px);
+    top: 35px;
+    margin: 0;
+    padding: 0;
+    width: 0;
+    height: 0;
+    border-top: 10px solid #3b3b3b;
+    border-bottom: 0px solid transparent;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+}
+
+#notepad.stowed > #notepad_arrow {
+    border-top: 0px solid transparent;
+    border-bottom: 10px solid #3b3b3b;
+    top: -10px;
+}
+
 #notepad_textarea {
-    width: 100%;
+    width: calc(100% - 10px);
     height: calc(100% - 35px);
-    padding: 5;
+    padding: 10px 0px 10px 10px;
     border: 0;
     margin: 0;
     display: block;
@@ -155,10 +173,22 @@ var saveAs=saveAs||navigator.msSaveBlob&&navigator.msSaveBlob.bind(navigator)||f
     resize: none;
     color: black;
     outline: none;
+    cursor: context-menu;
     background-image: repeating-linear-gradient(#9cdfff, #9cdfff 0.5px, white 0px, white 30px);
+    background-attachment: local;
 }
-/* twine-user-stylesheet #2: "story.css" */
-</style><script role="script" id="twine-user-script" type="text/twine-javascript">/* twine-user-script #1: "labequipment.js" */
+
+#notepad_textarea::-webkit-scrollbar {
+    width: 10px;
+}
+
+#notepad_textarea::-webkit-scrollbar-track {
+    background: #ccc;
+}
+
+#notepad_textarea::-webkit-scrollbar-thumb {
+    background: #888;
+}</style><script role="script" id="twine-user-script" type="text/twine-javascript">/* twine-user-script #1: "labequipment.js" */
 // Deep copies keys from the object from to the object to
 const cloneKeys = function(from, to) {
 	Object.keys(from).forEach(function(key) {
@@ -1687,50 +1717,67 @@ window.Material = Material;
 }());
 /* twine-user-script #2: "notepad.js" */
 const notepad = (function() {
+    const defaultHeight = window.innerHeight * 0.3;
+    const notepadData = recall("notepadData") || {contents: "", stowed: true, unstowedHeight: defaultHeight};
+
     const notepad = document.createElement("div");
     notepad.id = "notepad";
+    notepad.classList.add("unstowed");
 
-    const notepadToggle = document.createElement("button");
+    const notepadToggle = document.createElement("div");
     notepadToggle.id = "notepad_toggle";
-    notepadToggle.innerText = "Notes";
+
+    const notepadArrow = document.createElement("div");
+    notepadArrow.id = "notepad_arrow";
+
+    const notepadLabel = document.createElement("span");
+    notepadLabel.id = "notepad_label";
+    notepadLabel.innerText = "Notes";
 
     const notepadTextarea = document.createElement("textarea");
     notepadTextarea.id = "notepad_textarea";
-    notepadTextarea.value = recall("notes") || "";
+    notepadTextarea.value = notepadData.contents;
 
+    notepad.appendChild(notepadArrow);
     notepad.appendChild(notepadToggle);
+    notepadToggle.appendChild(notepadLabel);
     notepad.appendChild(notepadTextarea);
 
-    const defaultHeight = window.innerHeight * 0.3;
-    let stowed = false;
-    let unstowedHeight = defaultHeight;
+    let offsetY = 0;
 
     function stow() {
         notepad.style.height = "35px";
-        stowed = true;
+        notepadData.stowed = true;
+        notepad.classList.remove("unstowed");
         notepad.classList.add("stowed");
+    }
+    if (notepadData.stowed) {
+        stow();
+    } else {
+        notepad.style.height = notepadData.unstowedHeight + "px";
     }
 
     function unstow() {
-        notepad.style.height = unstowedHeight + "px";
-        stowed = false;
+        notepad.style.height = notepadData.unstowedHeight + "px";
+        notepadData.stowed = false;
         notepad.classList.remove("stowed");
+        notepad.classList.add("unstowed");
     }
 
     function resize(e) {
         if (!notepad.classList.contains("notransition")) {
             notepad.classList.add("notransition");
         }
-        if (stowed) {
+        if (notepadData.stowed) {
             unstow();
         }
-        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - e.pageY, 35), window.innerHeight);
-        if (newHeight < 10) {
-            unstowedHeight = defaultHeight;
+        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - e.pageY + offsetY, 35), window.innerHeight);
+        if (newHeight < 45) {
+            notepadData.unstowedHeight = defaultHeight;
             stow();
         } else {
             notepad.style.height = newHeight + "px";
-            unstowedHeight = Math.max(newHeight, defaultHeight);
+            notepadData.unstowedHeight = Math.max(newHeight, defaultHeight);
         }
     }
 
@@ -1738,7 +1785,7 @@ const notepad = (function() {
         if (notepad.classList.contains("notransition")) {
             notepad.classList.remove("notransition");
         } else {
-            if (stowed) {
+            if (notepadData.stowed) {
                 unstow();
             } else {
                 stow();
@@ -1749,6 +1796,7 @@ const notepad = (function() {
     }
 
     notepadToggle.addEventListener("mousedown", function(e) {
+        offsetY = e.offsetY;
         window.addEventListener("mousemove", resize);
         window.addEventListener("mouseup", mouseup);
     }, false);
@@ -1756,12 +1804,15 @@ const notepad = (function() {
     document.body.appendChild(notepad);
 
     window.addEventListener("beforeunload", function() {
-        memorize("notes", notepadTextarea.value);
+        notepadData.contents = notepadTextarea.value;
+        memorize("notepadData", notepadData);
     });
 
     $(document).on(":enginerestart", function() {
-        forget("notes");
+        forget("notepadData");
         notepadTextarea.value = "";
+        notepadData.unstowedHeight = defaultHeight;
+        stow();
     });
 
     return notepad;
