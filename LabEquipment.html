@@ -1733,7 +1733,7 @@ const labreport = (function() {
     }
 
     const initMomentMap = function() {
-        console.log("Init moment map");
+        //console.log("Init moment map");
         momentMap = new WeakMap();
         State.history.forEach(function(moment, i) {
             let existed = true;
@@ -1750,12 +1750,12 @@ const labreport = (function() {
     }
 
     const manageHistory = function() {
-        console.log("Managing history");
+        //console.log("Managing history");
         const maxStates = Config.history.maxStates;
 
         // A new moment has been created
         if (State.size > labreportData.history.length) {
-            console.log("New moment created");
+            //console.log("New moment created");
             const moment = createLabreportMoment();
             labreportData.history.push(moment);
             momentMap.set(State.current, moment);
@@ -1763,7 +1763,7 @@ const labreport = (function() {
 
         // An old moment has been overwritten
         if (!momentMap.has(State.current)) {
-            console.log("Old moment overwritten");
+            //console.log("Old moment overwritten");
             const moment = createLabreportMoment();
             labreportData.history[State.history.indexOf(State.current)] = moment;
             momentMap.set(State.current, moment);
@@ -1771,7 +1771,7 @@ const labreport = (function() {
 
         // Accumulate deltas of deleted moments
         while (labreportData.history.length > maxStates) {
-            console.log("Old moment accumulated");
+            //console.log("Old moment accumulated");
             const moment = labreportData.history.shift();
             labreportData.accumulated += moment.delta;
         }
@@ -1789,13 +1789,13 @@ const labreport = (function() {
     const append = function(delta) {
         if (!momentMap) {
             $(document).one(":storyready", function() {
-                console.log("Postponing append");
+                //console.log("Postponing append");
                 append(delta);
             });
             return;
         }
 
-        console.log("Appending:", delta);
+        //console.log("Appending:", delta);
         const moment = momentMap.get(State.current);
         if (restartDelta) {
             moment.delta = delta;
@@ -1808,7 +1808,7 @@ const labreport = (function() {
     const toPDF = function() {
         return promise.then(function() {
             if (!momentMap) {
-                console.log("Postponing pdf generation");
+                //console.log("Postponing pdf generation");
                 return new Promise(function(resolve, reject) {
                     $(document).one(":storyready", function() {
                         toPDF().then(resolve);
@@ -1816,7 +1816,7 @@ const labreport = (function() {
                 });
             }
 
-            console.log("Generating pdf");
+            //console.log("Generating pdf");
             const pdf = new jsPDF("p", "pt", "letter");
             const currentMoment = momentMap.get(State.current);
             const margins = {
@@ -1831,7 +1831,7 @@ const labreport = (function() {
                 return moment === currentMoment;
             });
             if (notepad) {
-                source += `<h3>Notes:</h3><p>${notepad.getNotes().replace(/\n/g, "</p><p>")}</p>`;
+                source += `<h2>Notes:</h2><span>${notepad.getNotes().replace(/\n/g, "<br>")}</span>`;
             }
             pdf.fromHTML(source , margins.left, margins.top, {width: margins.width});
             return pdf;
@@ -1905,12 +1905,12 @@ const labreport = (function() {
 
     labreport.append = append;
     labreport.toPDF = toPDF;
-    labreport.data = labreportData;
-    labreport.map = momentMap;
+    //labreport.data = labreportData;
+    //labreport.map = momentMap;
 
     return labreport;
 })();
-window.labreport = labreport;
+//window.labreport = labreport;
 /* twine-user-script #3: "notepad.js" */
 const notepad = (function() {
     const defaultHeight = window.innerHeight * 0.3;
@@ -1940,19 +1940,23 @@ const notepad = (function() {
     notepad.appendChild(notepadTextarea);
 
     let offsetY = 0;
+    let resizing = false;
 
+    // Stow notes
     function stow() {
         notepad.style.height = "35px";
         notepadData.stowed = true;
         notepad.classList.remove("unstowed");
         notepad.classList.add("stowed");
     }
+    // Handle default stow and default height
     if (notepadData.stowed) {
         stow();
     } else {
         notepad.style.height = notepadData.unstowedHeight + "px";
     }
 
+    // Unstow notes
     function unstow() {
         notepad.style.height = notepadData.unstowedHeight + "px";
         notepadData.stowed = false;
@@ -1960,14 +1964,17 @@ const notepad = (function() {
         notepad.classList.add("unstowed");
     }
 
+    // Handle mousemove and touchmove events to resize notes
     function resize(e) {
+        resizing = true;
         if (!notepad.classList.contains("notransition")) {
             notepad.classList.add("notransition");
         }
         if (notepadData.stowed) {
             unstow();
         }
-        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - e.pageY + offsetY, 35), window.innerHeight);
+        let pageY = e.type === "mousemove" ? e.pageY : e.touches[0].pageY;
+        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - pageY + offsetY, 35), window.innerHeight);
         if (newHeight < 45) {
             notepadData.unstowedHeight = defaultHeight;
             stow();
@@ -1977,25 +1984,50 @@ const notepad = (function() {
         }
     }
 
+    // Handle mouseup and touchend events to remove mousemove, touchmove, mouseup, and touchend event listeners
     function mouseup(e) {
         if (notepad.classList.contains("notransition")) {
             notepad.classList.remove("notransition");
+        }
+        if (e.type === "mouseup") {
+            window.removeEventListener("mousemove", resize);
+            window.removeEventListener("mouseup", mouseup);
         } else {
+            window.removeEventListener("touchmove", resize);
+            window.removeEventListener("touchend", mouseup);
+        }
+    }
+
+    // Handle mousedown and touchstart events to add mousemove, touchmove, mouseup, and touchend event listeners
+    function mousedown(e) {
+        resizing = false;
+        if (e.type === "mousedown") {
+            offsetY = e.offsetY;
+            window.addEventListener("mousemove", resize);
+            window.addEventListener("mouseup", mouseup);
+        } else {
+            const touch = e.touches[0];
+            console.log(e.type, touch);
+            offsetY = 0;
+            window.addEventListener("touchmove", resize);
+            window.addEventListener("touchend", mouseup);
+        }
+    }
+
+    // Handle click event to stow and unstow notes
+    function click(e) {
+        if (!resizing) {
             if (notepadData.stowed) {
                 unstow();
             } else {
                 stow();
             }
         }
-        window.removeEventListener("mousemove", resize);
-        window.removeEventListener("mouseup", mouseup);
     }
 
-    notepadToggle.addEventListener("mousedown", function(e) {
-        offsetY = e.offsetY;
-        window.addEventListener("mousemove", resize);
-        window.addEventListener("mouseup", mouseup);
-    }, false);
+    notepadToggle.addEventListener("mousedown", mousedown);
+    notepadToggle.addEventListener("touchstart", mousedown);
+    notepadToggle.addEventListener("click", click);
 
     document.body.appendChild(notepad);
 
@@ -2014,6 +2046,9 @@ const notepad = (function() {
     notepad.getNotes = function() {
         return notepadTextarea.value;
     }
+
+    notepad.stow = stow;
+    notepad.unstow = unstow;
 
     return notepad;
 })();</script><tw-passagedata pid="1" name="StoryInit" tags="" position="100,100" size="100,100">&lt;&lt;balance $singleBalance&gt;&gt;

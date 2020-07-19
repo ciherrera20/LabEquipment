@@ -26,19 +26,23 @@ const notepad = (function() {
     notepad.appendChild(notepadTextarea);
 
     let offsetY = 0;
+    let resizing = false;
 
+    // Stow notes
     function stow() {
         notepad.style.height = "35px";
         notepadData.stowed = true;
         notepad.classList.remove("unstowed");
         notepad.classList.add("stowed");
     }
+    // Handle default stow and default height
     if (notepadData.stowed) {
         stow();
     } else {
         notepad.style.height = notepadData.unstowedHeight + "px";
     }
 
+    // Unstow notes
     function unstow() {
         notepad.style.height = notepadData.unstowedHeight + "px";
         notepadData.stowed = false;
@@ -46,14 +50,17 @@ const notepad = (function() {
         notepad.classList.add("unstowed");
     }
 
+    // Handle mousemove and touchmove events to resize notes
     function resize(e) {
+        resizing = true;
         if (!notepad.classList.contains("notransition")) {
             notepad.classList.add("notransition");
         }
         if (notepadData.stowed) {
             unstow();
         }
-        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - e.pageY + offsetY, 35), window.innerHeight);
+        let pageY = e.type === "mousemove" ? e.pageY : e.touches[0].pageY;
+        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - pageY + offsetY, 35), window.innerHeight);
         if (newHeight < 45) {
             notepadData.unstowedHeight = defaultHeight;
             stow();
@@ -63,25 +70,50 @@ const notepad = (function() {
         }
     }
 
+    // Handle mouseup and touchend events to remove mousemove, touchmove, mouseup, and touchend event listeners
     function mouseup(e) {
         if (notepad.classList.contains("notransition")) {
             notepad.classList.remove("notransition");
+        }
+        if (e.type === "mouseup") {
+            window.removeEventListener("mousemove", resize);
+            window.removeEventListener("mouseup", mouseup);
         } else {
+            window.removeEventListener("touchmove", resize);
+            window.removeEventListener("touchend", mouseup);
+        }
+    }
+
+    // Handle mousedown and touchstart events to add mousemove, touchmove, mouseup, and touchend event listeners
+    function mousedown(e) {
+        resizing = false;
+        if (e.type === "mousedown") {
+            offsetY = e.offsetY;
+            window.addEventListener("mousemove", resize);
+            window.addEventListener("mouseup", mouseup);
+        } else {
+            const touch = e.touches[0];
+            console.log(e.type, touch);
+            offsetY = 0;
+            window.addEventListener("touchmove", resize);
+            window.addEventListener("touchend", mouseup);
+        }
+    }
+
+    // Handle click event to stow and unstow notes
+    function click(e) {
+        if (!resizing) {
             if (notepadData.stowed) {
                 unstow();
             } else {
                 stow();
             }
         }
-        window.removeEventListener("mousemove", resize);
-        window.removeEventListener("mouseup", mouseup);
     }
 
-    notepadToggle.addEventListener("mousedown", function(e) {
-        offsetY = e.offsetY;
-        window.addEventListener("mousemove", resize);
-        window.addEventListener("mouseup", mouseup);
-    }, false);
+    notepadToggle.addEventListener("mousedown", mousedown);
+    notepadToggle.addEventListener("touchstart", mousedown);
+    notepadToggle.addEventListener("click", click);
 
     document.body.appendChild(notepad);
 
@@ -100,6 +132,9 @@ const notepad = (function() {
     notepad.getNotes = function() {
         return notepadTextarea.value;
     }
+
+    notepad.stow = stow;
+    notepad.unstow = unstow;
 
     return notepad;
 })();
