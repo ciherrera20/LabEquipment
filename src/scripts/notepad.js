@@ -68,6 +68,7 @@ const notepad = (function() {
             notepad.style.height = newHeight + "px";
             notepadData.unstowedHeight = Math.max(newHeight, defaultHeight);
         }
+        e.preventDefault();
     }
 
     // Handle mouseup and touchend events to remove mousemove, touchmove, mouseup, and touchend event listeners
@@ -82,6 +83,7 @@ const notepad = (function() {
             window.removeEventListener("touchmove", resize);
             window.removeEventListener("touchend", mouseup);
         }
+        e.preventDefault();
     }
 
     // Handle mousedown and touchstart events to add mousemove, touchmove, mouseup, and touchend event listeners
@@ -98,6 +100,7 @@ const notepad = (function() {
             window.addEventListener("touchmove", resize);
             window.addEventListener("touchend", mouseup);
         }
+        e.preventDefault();
     }
 
     // Handle click event to stow and unstow notes
@@ -109,6 +112,7 @@ const notepad = (function() {
                 stow();
             }
         }
+        e.preventDefault();
     }
 
     notepadToggle.addEventListener("mousedown", mousedown);
