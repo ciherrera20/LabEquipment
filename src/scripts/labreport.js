@@ -111,7 +111,7 @@ const labreport = (function() {
                 return moment === currentMoment;
             });
             if (notepad) {
-                source += `<h2>Notes:</h2><p>${notepad.getNotes().replace(/\n/g, "</p><p>")}</p>`;
+                source += `<h2>Notes:</h2><span>${notepad.getNotes().replace(/\n/g, "<br>")}</span>`;
             }
             pdf.fromHTML(source , margins.left, margins.top, {width: margins.width});
             return pdf;
