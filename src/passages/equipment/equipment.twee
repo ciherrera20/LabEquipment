@@ -1,3 +1,9 @@
 :: equipment [nobr]
 
 Back to [[introduction]]
+
+<<report>>
+    <<appendHeader Equipment>>
+    <br>
+    <<displayPDF "50vw" "1000px">>
+<</report>>

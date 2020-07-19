@@ -97,6 +97,9 @@ const notepad = (function() {
         stow();
     });
 
+    notepad.getNotes = function() {
+        return notepadTextarea.value;
+    }
+
     return notepad;
 })();
-window.notepad = notepad;
