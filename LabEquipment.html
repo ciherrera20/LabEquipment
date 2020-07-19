@@ -782,25 +782,30 @@ const Balance = (function() {
     Balance.inheritFrom(EquipmentContainer);
     Cloneable.setupConstructor(Balance, "Balance");
 
-    Balance.prototype.measureMass = function() {
-        let measuredMass = this.offset + this.contents.reduce(function(acc, item) {
+    const getMass = function() {
+        return this.offset + this.contents.reduce(function(acc, item) {
 			return acc + SCVariable.getVar(item).getMass();
         }, 0);
-        
+    }
+
+    Balance.prototype.measureMass = function() {
+        let measuredMass = getMass.call(this);
+        let roundedMass = measuredMass;
+        if (this.decimalPlaces !== Infinity) {
+            roundedMass = Math.round(measuredMass * Math.pow(10, this.decimalPlaces)) / Math.pow(10, this.decimalPlaces);
+        }
+
         const e = Object.create(null);
         e.parent = this;
         e.measuredMass = measuredMass;
+        e.roundedMass = roundedMass;
         this.dispatchEvent(LEvent("measurement", e));
 
-        if (this.decimalPlaces !== Infinity) {
-            measuredMass = Math.round(measuredMass * Math.pow(10, this.decimalPlaces)) / Math.pow(10, this.decimalPlaces);
-        }
-
-        return measuredMass;
+        return roundedMass;
     }
 
     Balance.prototype.zero = function() {
-        this.offset = -(this.measureMass() - this.offset);
+        this.offset = -(getMass.call(this) - this.offset);
         
         const e = Object.create(null);
         e.parent = this;
@@ -847,7 +852,6 @@ const Balance = (function() {
     Balance.prototype.updateAddOptionDisplays = function() {
         const that = this;
         const addOptionDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_add_option_display`);
-        console.log("Updating add option displays");
         addOptionDisplays.forEach(function(addOptionDisplay) {
             const objectToAdd = addOptionDisplay.objectToAdd;
             const addPassage = addOptionDisplay.addPassage || "";
@@ -1739,7 +1743,7 @@ const labreport = (function() {
             }
             momentMap.set(moment, labreportData.history[i]);
             if (i === 0 && !existed) {
-                const title = document.getElementById("story-title").innerHTML + " Lab Report";
+                const title = document.getElementById("story-title").innerHTML + " Report";
                 append(`<h1>${title}</h1>`);
             }
         });
@@ -1749,13 +1753,25 @@ const labreport = (function() {
         console.log("Managing history");
         const maxStates = Config.history.maxStates;
 
+        // A new moment has been created
         if (State.size > labreportData.history.length) {
+            console.log("New moment created");
             const moment = createLabreportMoment();
             labreportData.history.push(moment);
             momentMap.set(State.current, moment);
         }
 
+        // An old moment has been overwritten
+        if (!momentMap.has(State.current)) {
+            console.log("Old moment overwritten");
+            const moment = createLabreportMoment();
+            labreportData.history[State.history.indexOf(State.current)] = moment;
+            momentMap.set(State.current, moment);
+        }
+
+        // Accumulate deltas of deleted moments
         while (labreportData.history.length > maxStates) {
+            console.log("Old moment accumulated");
             const moment = labreportData.history.shift();
             labreportData.accumulated += moment.delta;
         }
@@ -1815,7 +1831,7 @@ const labreport = (function() {
                 return moment === currentMoment;
             });
             if (notepad) {
-                source += `<h3>Notes:</h3><p>${notepad.getNotes()}</p>`;
+                source += `<h3>Notes:</h3><p>${notepad.getNotes().replace(/\n/g, "</p><p>")}</p>`;
             }
             pdf.fromHTML(source , margins.left, margins.top, {width: margins.width});
             return pdf;
@@ -1835,7 +1851,6 @@ const labreport = (function() {
         skipArgs: false,
         tags: ["setTitle", "appendRaw", "appendHeader", "appendParagraph", "appendText", "appendNewline", "displayPDF"],
         handler() {
-            console.log(this);
             const that = this;
             this.payload.forEach(function(chunk) {
                 if (chunk.name === "setTitle") {

@@ -13,7 +13,7 @@ const labreport = (function() {
     }
 
     const initMomentMap = function() {
-        console.log("Init moment map");
+        //console.log("Init moment map");
         momentMap = new WeakMap();
         State.history.forEach(function(moment, i) {
             let existed = true;
@@ -23,23 +23,35 @@ const labreport = (function() {
             }
             momentMap.set(moment, labreportData.history[i]);
             if (i === 0 && !existed) {
-                const title = document.getElementById("story-title").innerHTML + " Lab Report";
+                const title = document.getElementById("story-title").innerHTML + " Report";
                 append(`<h1>${title}</h1>`);
             }
         });
     }
 
     const manageHistory = function() {
-        console.log("Managing history");
+        //console.log("Managing history");
         const maxStates = Config.history.maxStates;
 
+        // A new moment has been created
         if (State.size > labreportData.history.length) {
+            //console.log("New moment created");
             const moment = createLabreportMoment();
             labreportData.history.push(moment);
             momentMap.set(State.current, moment);
         }
 
+        // An old moment has been overwritten
+        if (!momentMap.has(State.current)) {
+            //console.log("Old moment overwritten");
+            const moment = createLabreportMoment();
+            labreportData.history[State.history.indexOf(State.current)] = moment;
+            momentMap.set(State.current, moment);
+        }
+
+        // Accumulate deltas of deleted moments
         while (labreportData.history.length > maxStates) {
+            //console.log("Old moment accumulated");
             const moment = labreportData.history.shift();
             labreportData.accumulated += moment.delta;
         }
@@ -57,13 +69,13 @@ const labreport = (function() {
     const append = function(delta) {
         if (!momentMap) {
             $(document).one(":storyready", function() {
-                console.log("Postponing append");
+                //console.log("Postponing append");
                 append(delta);
             });
             return;
         }
 
-        console.log("Appending:", delta);
+        //console.log("Appending:", delta);
         const moment = momentMap.get(State.current);
         if (restartDelta) {
             moment.delta = delta;
@@ -76,7 +88,7 @@ const labreport = (function() {
     const toPDF = function() {
         return promise.then(function() {
             if (!momentMap) {
-                console.log("Postponing pdf generation");
+                //console.log("Postponing pdf generation");
                 return new Promise(function(resolve, reject) {
                     $(document).one(":storyready", function() {
                         toPDF().then(resolve);
@@ -84,7 +96,7 @@ const labreport = (function() {
                 });
             }
 
-            console.log("Generating pdf");
+            //console.log("Generating pdf");
             const pdf = new jsPDF("p", "pt", "letter");
             const currentMoment = momentMap.get(State.current);
             const margins = {
@@ -99,7 +111,7 @@ const labreport = (function() {
                 return moment === currentMoment;
             });
             if (notepad) {
-                source += `<h3>Notes:</h3><p>${notepad.getNotes()}</p>`;
+                source += `<h2>Notes:</h2><p>${notepad.getNotes().replace(/\n/g, "</p><p>")}</p>`;
             }
             pdf.fromHTML(source , margins.left, margins.top, {width: margins.width});
             return pdf;
@@ -119,7 +131,6 @@ const labreport = (function() {
         skipArgs: false,
         tags: ["setTitle", "appendRaw", "appendHeader", "appendParagraph", "appendText", "appendNewline", "displayPDF"],
         handler() {
-            console.log(this);
             const that = this;
             this.payload.forEach(function(chunk) {
                 if (chunk.name === "setTitle") {
@@ -174,9 +185,9 @@ const labreport = (function() {
 
     labreport.append = append;
     labreport.toPDF = toPDF;
-    labreport.data = labreportData;
-    labreport.map = momentMap;
+    //labreport.data = labreportData;
+    //labreport.map = momentMap;
 
     return labreport;
 })();
-window.labreport = labreport;
+//window.labreport = labreport;

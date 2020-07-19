@@ -593,25 +593,30 @@ const Balance = (function() {
     Balance.inheritFrom(EquipmentContainer);
     Cloneable.setupConstructor(Balance, "Balance");
 
-    Balance.prototype.measureMass = function() {
-        let measuredMass = this.offset + this.contents.reduce(function(acc, item) {
+    const getMass = function() {
+        return this.offset + this.contents.reduce(function(acc, item) {
 			return acc + SCVariable.getVar(item).getMass();
         }, 0);
-        
+    }
+
+    Balance.prototype.measureMass = function() {
+        let measuredMass = getMass.call(this);
+        let roundedMass = measuredMass;
+        if (this.decimalPlaces !== Infinity) {
+            roundedMass = Math.round(measuredMass * Math.pow(10, this.decimalPlaces)) / Math.pow(10, this.decimalPlaces);
+        }
+
         const e = Object.create(null);
         e.parent = this;
         e.measuredMass = measuredMass;
+        e.roundedMass = roundedMass;
         this.dispatchEvent(LEvent("measurement", e));
 
-        if (this.decimalPlaces !== Infinity) {
-            measuredMass = Math.round(measuredMass * Math.pow(10, this.decimalPlaces)) / Math.pow(10, this.decimalPlaces);
-        }
-
-        return measuredMass;
+        return roundedMass;
     }
 
     Balance.prototype.zero = function() {
-        this.offset = -(this.measureMass() - this.offset);
+        this.offset = -(getMass.call(this) - this.offset);
         
         const e = Object.create(null);
         e.parent = this;
@@ -658,7 +663,6 @@ const Balance = (function() {
     Balance.prototype.updateAddOptionDisplays = function() {
         const that = this;
         const addOptionDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_add_option_display`);
-        console.log("Updating add option displays");
         addOptionDisplays.forEach(function(addOptionDisplay) {
             const objectToAdd = addOptionDisplay.objectToAdd;
             const addPassage = addOptionDisplay.addPassage || "";
