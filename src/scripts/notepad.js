@@ -52,7 +52,7 @@ const notepad = (function() {
 
     // Handle mousemove and touchmove events to resize notes
     function resize(e) {
-        resizing = true;
+        console.log(e.type);
         if (!notepad.classList.contains("notransition")) {
             notepad.classList.add("notransition");
         }
@@ -73,8 +73,15 @@ const notepad = (function() {
 
     // Handle mouseup and touchend events to remove mousemove, touchmove, mouseup, and touchend event listeners
     function mouseup(e) {
+        console.log(e.type);
         if (notepad.classList.contains("notransition")) {
             notepad.classList.remove("notransition");
+        } else {
+            if (notepadData.stowed) {
+                unstow();
+            } else {
+                stow();
+            }
         }
         if (e.type === "mouseup") {
             window.removeEventListener("mousemove", resize);
@@ -88,14 +95,12 @@ const notepad = (function() {
 
     // Handle mousedown and touchstart events to add mousemove, touchmove, mouseup, and touchend event listeners
     function mousedown(e) {
-        resizing = false;
+        console.log(e.type);
         if (e.type === "mousedown") {
             offsetY = e.offsetY;
             window.addEventListener("mousemove", resize);
             window.addEventListener("mouseup", mouseup);
         } else {
-            const touch = e.touches[0];
-            console.log(e.type, touch);
             offsetY = 0;
             window.addEventListener("touchmove", resize);
             window.addEventListener("touchend", mouseup);
@@ -103,21 +108,8 @@ const notepad = (function() {
         e.preventDefault();
     }
 
-    // Handle click event to stow and unstow notes
-    function click(e) {
-        if (!resizing) {
-            if (notepadData.stowed) {
-                unstow();
-            } else {
-                stow();
-            }
-        }
-        e.preventDefault();
-    }
-
     notepadToggle.addEventListener("mousedown", mousedown);
     notepadToggle.addEventListener("touchstart", mousedown);
-    notepadToggle.addEventListener("click", click);
 
     document.body.appendChild(notepad);
 
