@@ -207,12 +207,17 @@ const labreport = (function() {
                         append(`<br>`);
                     }
                 } else if (chunk.name === "displayPDF") {
-                    const iframe = document.createElement("iframe");
+                    const pdfContainer = document.createElement("div");
+                    pdfContainer.classList.add("pdfcontainer");
+
+                    const pdfViewer = document.createElement("iframe");
                     labreport.toPDF().then(function(pdf) {
-                        iframe.src = URL.createObjectURL(pdf.output("blob", "labreport"));
+                        pdfViewer.src = URL.createObjectURL(pdf.output("blob", "labreport"));
                     });
-                    iframe.style = `width: ${chunk.args[0]}; height: ${chunk.args[1]}`;
-                    jQuery(that.output).append(iframe);
+                    pdfViewer.classList.add("pdfviewer");
+
+                    pdfContainer.appendChild(pdfViewer);
+                    jQuery(that.output).append(pdfContainer);
                 }
                 jQuery(that.output).wiki(chunk.contents);
             });
