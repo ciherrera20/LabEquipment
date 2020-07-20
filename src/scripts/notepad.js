@@ -1,6 +1,6 @@
 const notepad = (function() {
     const defaultHeight = window.innerHeight * 0.3;
-    const notepadData = recall("notepadData") || {contents: "", stowed: true, unstowedHeight: defaultHeight};
+    let notepadData = recall("notepadData") || {contents: "", stowed: true, unstowedHeight: defaultHeight};
 
     const notepad = document.createElement("div");
     notepad.id = "notepad";
@@ -18,28 +18,27 @@ const notepad = (function() {
 
     const notepadTextarea = document.createElement("textarea");
     notepadTextarea.id = "notepad_textarea";
-    notepadTextarea.value = notepadData.contents;
 
     notepad.appendChild(notepadArrow);
     notepad.appendChild(notepadToggle);
     notepadToggle.appendChild(notepadLabel);
     notepad.appendChild(notepadTextarea);
 
+    const cssReady = new Promise(function(resolve, reject) {
+        $(document).ready(function() {
+            resolve();
+        });
+    });
+
     let offsetY = 0;
     let resizing = false;
 
     // Stow notes
     function stow() {
-        notepad.style.height = "35px";
+        notepad.style.height = getComputedStyle(notepad).getPropertyValue("--notepad-toggle-height");
         notepadData.stowed = true;
         notepad.classList.remove("unstowed");
         notepad.classList.add("stowed");
-    }
-    // Handle default stow and default height
-    if (notepadData.stowed) {
-        stow();
-    } else {
-        notepad.style.height = notepadData.unstowedHeight + "px";
     }
 
     // Unstow notes
@@ -60,8 +59,9 @@ const notepad = (function() {
             unstow();
         }
         let pageY = e.type === "mousemove" ? e.pageY : e.touches[0].pageY;
-        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - pageY + offsetY, 35), window.innerHeight);
-        if (newHeight < 45) {
+        let notepadToggleHeight = parseInt(getComputedStyle(notepad).getPropertyValue("--notepad-toggle-height"));
+        let newHeight = Math.min(Math.max(notepad.getBoundingClientRect().bottom - pageY + offsetY, notepadToggleHeight), window.innerHeight);
+        if (newHeight < notepadToggleHeight + 10) {
             notepadData.unstowedHeight = defaultHeight;
             stow();
         } else {
@@ -111,19 +111,58 @@ const notepad = (function() {
     notepadToggle.addEventListener("mousedown", mousedown);
     notepadToggle.addEventListener("touchstart", mousedown);
 
+    function init() {
+        // Handle default notepad properties
+        notepadTextarea.value = notepadData.contents;
+        if (notepadData.stowed) {
+            cssReady.then(stow);
+        } else {
+            unstow();
+            notepad.style.height = notepadData.unstowedHeight + "px";
+        }
+    }
+    init();
+
     document.body.appendChild(notepad);
 
+    // Save callbacks
     window.addEventListener("beforeunload", function() {
         notepadData.contents = notepadTextarea.value;
         memorize("notepadData", notepadData);
     });
 
     $(document).on(":enginerestart", function() {
+        console.log("Engine restart");
         forget("notepadData");
         notepadTextarea.value = "";
         notepadData.unstowedHeight = defaultHeight;
-        stow();
+        notepadData.stowed = true;
     });
+
+    const onSaveCache = Config.saves.onSave;
+    Config.saves.onSave = function(save) {
+        if (!save.metadata) {
+            save.metadata = {};
+        }
+        notepadData.contents = notepadTextarea.value;
+        save.metadata.notepadData = notepadData;
+        console.log(save);
+        if (typeof onSaveCache === "function") {
+            return onSaveCache(save);
+        }
+    }
+
+    const onLoadCache = Config.saves.onLoad;
+    Config.saves.onLoad = function(save) {
+        console.log(save);
+        if (save.metadata.notepadData) {
+            notepadData = save.metadata.notepadData
+            init();
+        }
+        if (typeof onLoadCache === "function") {
+            return onLoadCache(save);
+        }
+    }
 
     notepad.getNotes = function() {
         return notepadTextarea.value;
@@ -134,3 +173,5 @@ const notepad = (function() {
 
     return notepad;
 })();
+
+window.notepad = notepad;

@@ -1,7 +1,8 @@
 .pdfcontainer {
-    width: 100%;
+    --pdf-width: 100%;
+    width: var(--pdf-width);
     height: 0;
-    padding-top: calc(11 / 8.5 * 100%);
+    padding-top: calc(11 / 8.5 * var(--pdf-width));
     position: relative;
 }
 
