@@ -4,7 +4,9 @@ const labreport = (function() {
     const labreport = Object.create(null);
     let labreportData = recall("labreportData") || {accumulated: "", history: []};
     let momentMap;
+    let currentMoment;
     let restartDelta = true;
+    let deltaCache;
 
     const createLabreportMoment = function() {
         const moment = Object.create(null);
@@ -27,11 +29,18 @@ const labreport = (function() {
                 append(`<h1>${title}</h1>`);
             }
         });
+        currentMoment = momentMap.get(State.current);
     }
 
     const manageHistory = function() {
         //console.log("Managing history");
         const maxStates = Config.history.maxStates;
+
+        // Update current moment delta
+        //console.log(currentMoment, restartDelta, momentMap, State.current);
+        if (currentMoment && !restartDelta) {
+            currentMoment.delta = deltaCache;
+        }
 
         // A new moment has been created
         if (State.size > labreportData.history.length) {
@@ -56,6 +65,9 @@ const labreport = (function() {
             labreportData.accumulated += moment.delta;
         }
 
+        // Update local variables
+        currentMoment = momentMap.get(State.current);
+        deltaCache = "";
         restartDelta = true;
     }
 
@@ -76,12 +88,14 @@ const labreport = (function() {
         }
 
         //console.log("Appending:", delta);
-        const moment = momentMap.get(State.current);
+        //const moment = momentMap.get(State.current);
         if (restartDelta) {
-            moment.delta = delta;
+            //moment.delta = delta;
+            deltaCache = delta;
             restartDelta = false;
         } else {
-            moment.delta += delta;
+            //moment.delta += delta;
+            deltaCache += delta;
         }
     }
 
@@ -126,6 +140,28 @@ const labreport = (function() {
         forget("labreportData");
         labreportData = undefined;
     });
+
+    const onSaveCache = Config.saves.onSave;
+    Config.saves.onSave = function(save) {
+        if (!save.metadata) {
+            save.metadata = {};
+        }
+        save.metadata.labreportData = labreportData;
+        if (typeof onSaveCache === "function") {
+            return onSaveCache(save);
+        }
+    }
+
+    const onLoadCache = Config.saves.onLoad;
+    Config.saves.onLoad = function(save) {
+        if (save.metadata.labreportData) {
+            labreportData = save.metadata.labreportData;
+            initMomentMap();
+        }
+        if (typeof onLoadCache === "function") {
+            return onLoadCache(save);
+        }
+    }
 
     Macro.add("report", {
         skipArgs: false,
@@ -173,7 +209,7 @@ const labreport = (function() {
                 } else if (chunk.name === "displayPDF") {
                     const iframe = document.createElement("iframe");
                     labreport.toPDF().then(function(pdf) {
-                        iframe.src = pdf.output("dataurl", "labreport");
+                        iframe.src = URL.createObjectURL(pdf.output("blob", "labreport"));
                     });
                     iframe.style = `width: ${chunk.args[0]}; height: ${chunk.args[1]}`;
                     jQuery(that.output).append(iframe);

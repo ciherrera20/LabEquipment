@@ -52,7 +52,7 @@ const notepad = (function() {
 
     // Handle mousemove and touchmove events to resize notes
     function resize(e) {
-        console.log(e.type);
+        //console.log(e.type);
         if (!notepad.classList.contains("notransition")) {
             notepad.classList.add("notransition");
         }
@@ -73,7 +73,7 @@ const notepad = (function() {
 
     // Handle mouseup and touchend events to remove mousemove, touchmove, mouseup, and touchend event listeners
     function mouseup(e) {
-        console.log(e.type);
+        //console.log(e.type);
         if (notepad.classList.contains("notransition")) {
             notepad.classList.remove("notransition");
         } else {
@@ -95,7 +95,7 @@ const notepad = (function() {
 
     // Handle mousedown and touchstart events to add mousemove, touchmove, mouseup, and touchend event listeners
     function mousedown(e) {
-        console.log(e.type);
+        //console.log(e.type);
         if (e.type === "mousedown") {
             offsetY = e.offsetY;
             window.addEventListener("mousemove", resize);
