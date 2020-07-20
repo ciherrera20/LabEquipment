@@ -34,6 +34,7 @@
     align-items: center;
     justify-content: center;
     background-color: #3b3b3b;
+    overflow: hidden;
 }
 
 #notepad_toggle:hover {
@@ -62,6 +63,7 @@
 
 #notepad_textarea {
     width: calc(100% - 10px);
+    min-width: 0;
     height: calc(100% - 35px);
     padding: 10px 0px 10px 10px;
     border: 0;
