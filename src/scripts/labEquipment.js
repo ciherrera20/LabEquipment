@@ -7,7 +7,7 @@ const cloneKeys = function(from, to) {
 }
 
 if (!Object.freezeProperty) {
-    Object.defineProperty(Object, "freezeProperty", {
+    Object.defineProperty(Object, 'freezeProperty', {
         writable: false,
         configurable: false,
         enumerable: true,
@@ -21,7 +21,7 @@ if (!Object.freezeProperty) {
 }
 
 if (!Object.freezeProperties) {
-    Object.defineProperty(Object, "freezeProperties", {
+    Object.defineProperty(Object, 'freezeProperties', {
         writable: false,
         configurable: false,
         enumerable: true,
@@ -37,7 +37,7 @@ if (!Object.freezeProperties) {
 }
 
 if (!Function.prototype.inheritFrom) {
-    Object.defineProperty(Function.prototype, "inheritFrom", {
+    Object.defineProperty(Function.prototype, 'inheritFrom', {
         writable: false,
         configurable: false,
         enumerable: true,
@@ -126,7 +126,7 @@ const EventDispatcher = (function(){
         const eventName = LEvent.type;
         
         // Input validation
-        if (!callbacks[eventName]) throw new Error("The event \"" + eventName + "\" has not been defined");
+        if (!callbacks[eventName]) throw new Error('The event \'' + eventName + '\' has not been defined');
         
         // Execute all callbacks for the given event with the given event data
         callbacks[eventName].forEach(function(callback) {
@@ -146,7 +146,7 @@ const EventDispatcher = (function(){
         const callbacks = state.callbacks;
         
         // Input validation
-        if (!callback) throw new Error("A callback function must be provided");
+        if (!callback) throw new Error('A callback function must be provided');
         
         // Add callback
         if (callbacks[eventName]) {
@@ -166,7 +166,7 @@ const EventDispatcher = (function(){
         const callbacks = state.callbacks;
         
         // Input validation
-        if (!callback) throw new Error("A callback function must be provided");
+        if (!callback) throw new Error('A callback function must be provided');
         
         // Remove callback
         callbacks[eventName].delete(callback);
@@ -214,7 +214,8 @@ const EventDispatcher = (function(){
         contents.add(content);
     }
 
-    Macro.add("on", {
+    Macro.add('on', {
+        isAsync: true,
         tags: null,
         handler() {
             const that = this;
@@ -225,37 +226,37 @@ const EventDispatcher = (function(){
             });
 
             // Make sure eventContext is not null
-            if (eventContext === null) {
-                that.error("'on' macro must have a parent context whose first argument is an instance of EventDispatcher");
+            if (eventContext == null) {
+                that.error('\'on\' macro must have a parent context whose first argument is an instance of EventDispatcher');
             }
             const parentObject = eventContext.args[0];
 
             // Determine whether the callback should be run as javascript
             let isJS = false;
-            if (this.args[this.args.length - 1] === "JS") {
+            if (this.args[this.args.length - 1] === 'JS') {
                 isJS = true;
                 this.args.pop();
             }
 
             // Check if the instance of EventDispatcher has the given event names
             const eventNames = this.args.map(function(arg) {
-                if (typeof arg !== "string") {
-                    that.error("Argument must be a string");
+                if (typeof arg !== 'string') {
+                    that.error('Argument must be a string');
                 } else if (!parentObject.hasEvent(arg)) {
-                    that.error("Parent object does not have an event names " + eventName);
+                    that.error('Parent object does not have an event names ' + eventName);
                 }
                 return arg;
             });
 
             // Create and add callback function
             const content = this.payload[0].contents.trim();
-            if (content !== "" && !hasContent(parentObject, content)) {
+            if (content !== '' && !hasContent(parentObject, content)) {
                 addContent(parentObject, content);
                 let callback;
                 if (isJS) {
-                    callback = Function("event", content);
+                    callback = Function('event', content);
                 } else {
-                    this.addShadow("$event");
+                    this.addShadow('$event');
                     callback = this.createShadowWrapper(function(event) {
                         const eventCache = State.variables.event;
                         State.variables.event = event;
@@ -332,7 +333,7 @@ const Cloneable = (function() {
     }
 
     Cloneable.prototype.clone = function() {
-        //console.log("Object cloned");
+        //console.log('Object cloned');
         return this.constructor.fromObj(this.toObj());
     }
 
@@ -359,7 +360,7 @@ const Cloneable = (function() {
      */
     const toJSONFactory = function(constructorName) {
         if (!setup[constructorName]) {
-			throw new Error("Constructor must be a property on the setup object");
+			throw new Error('Constructor must be a property on the setup object');
 		}
 
 		return function() {
@@ -377,7 +378,7 @@ const Cloneable = (function() {
         setup[constructorName] = constructor;
         constructor.prototype.toJSON = toJSONFactory(constructorName);
     }
-    Cloneable.setupConstructor(Cloneable, "Cloneable");
+    Cloneable.setupConstructor(Cloneable, 'Cloneable');
 
     return Cloneable;
 })();
@@ -385,7 +386,7 @@ const Cloneable = (function() {
 const SCVariable = (function() {
     const populate = function(config) {
         this.key = config.key;
-        Object.freezeProperty(this, "key");
+        Object.freezeProperty(this, 'key');
     }
 
     const SCVariable = function(key) {
@@ -399,17 +400,23 @@ const SCVariable = (function() {
         const config = Object.create(null);
         config.key = key;
         populate.call(this, config);
-        State.variables[this.key] = this;
+        if (this.key !== undefined) {
+            State.variables[this.key] = this;
+        }
     }
     SCVariable.inheritFrom(Cloneable);
-    Cloneable.setupConstructor(SCVariable, "SCVariable");
+    Cloneable.setupConstructor(SCVariable, 'SCVariable');
 
     SCVariable.prototype.getKey = function() {
         return this.key;
     }
 
     SCVariable.prototype.getVar = function() {
-        return State.variables[this.key];
+        if (this.key === undefined) {
+            return this;
+        } else {
+            return State.variables[this.key];
+        }
     }
 
 	SCVariable.getVar = function(key) {
@@ -435,7 +442,7 @@ const SCVariable = (function() {
 
 const LabEquipment = (function() {
     const populate = function(config) {
-        this.displayName = config.displayName;
+        this.name = config.name;
         this.containedIn = config.containedIn;
     }
 
@@ -449,12 +456,12 @@ const LabEquipment = (function() {
         EventDispatcher.call(this, []);
 
         const config = Object.create(null);
-        config.displayName = key;
+        config.name = key;
         populate.call(this, config);
     }
     LabEquipment.inheritFrom(SCVariable);
     Object.assign(LabEquipment.prototype, EventDispatcher.prototype);
-    Cloneable.setupConstructor(LabEquipment, "LabEquipment");
+    Cloneable.setupConstructor(LabEquipment, 'LabEquipment');
 
     LabEquipment.fromObj = function(obj) {
         if (this === LabEquipment) {
@@ -467,7 +474,7 @@ const LabEquipment = (function() {
         EventDispatcher.call(this, []);
 
         const config = Object.create(null);
-        config.displayName = obj.displayName;
+        config.name = obj.name;
         config.containedIn = obj.containedIn;
         populate.call(this, config);
     }
@@ -479,7 +486,7 @@ const EquipmentContainer = (function() {
     const populate = function(config) {
         this.contents = config.contents;
         this.singleItem = config.singleItem;
-        this.defineEvents(["itemadded", "itemremoved"]);
+        this.defineEvents(['itemadded', 'itemremoved']);
     }
 
     const EquipmentContainer = function(key) {
@@ -496,7 +503,7 @@ const EquipmentContainer = (function() {
         populate.call(this, config);
     }
     EquipmentContainer.inheritFrom(LabEquipment);
-    Cloneable.setupConstructor(EquipmentContainer, "EquipmentContainer");
+    Cloneable.setupConstructor(EquipmentContainer, 'EquipmentContainer');
 
     EquipmentContainer.prototype.add = function(item) {
         if (item.containedIn) {
@@ -511,7 +518,7 @@ const EquipmentContainer = (function() {
         const e = Object.create(null);
         e.parent = this;
         e.itemAdded = item;
-        this.dispatchEvent(LEvent("itemadded", e));
+        this.dispatchEvent(LEvent('itemadded', e));
     }
 
     EquipmentContainer.prototype.indexOf = function(item) {
@@ -543,7 +550,7 @@ const EquipmentContainer = (function() {
         const e = Object.create(null);
         e.parent = this;
         e.itemRemoved = itemRemoved;
-        this.dispatchEvent(LEvent("itemremoved", e));
+        this.dispatchEvent(LEvent('itemremoved', e));
 
 		return itemRemoved;
     }
@@ -570,11 +577,15 @@ const EquipmentContainer = (function() {
     return EquipmentContainer;
 })();
 
+const dataRegex = /\$([^0-9\s]\w*?)\$/g;
+const newlineRegex = /\r?\n|\r/g;
+const varRegex = new RegExp(Patterns.variable);
+
 const Balance = (function() {
     const populate = function(config) {
         this.offset = config.offset;
         this.decimalPlaces = config.decimalPlaces;
-        this.defineEvents(["zero", "measurement"]);
+        this.defineEvents(['zero', 'measurement']);
     }
 
     const Balance = function(key) {
@@ -591,7 +602,7 @@ const Balance = (function() {
         populate.call(this, config);
     }
     Balance.inheritFrom(EquipmentContainer);
-    Cloneable.setupConstructor(Balance, "Balance");
+    Cloneable.setupConstructor(Balance, 'Balance');
 
     const getMass = function() {
         return this.offset + this.contents.reduce(function(acc, item) {
@@ -610,7 +621,7 @@ const Balance = (function() {
         e.parent = this;
         e.measuredMass = measuredMass;
         e.roundedMass = roundedMass;
-        this.dispatchEvent(LEvent("measurement", e));
+        this.dispatchEvent(LEvent('measurement', e));
 
         return roundedMass;
     }
@@ -621,28 +632,40 @@ const Balance = (function() {
         const e = Object.create(null);
         e.parent = this;
         e.offset = this.offset;
-        this.dispatchEvent(LEvent("zero", e));
+        this.dispatchEvent(LEvent('zero', e));
     }
 
     Balance.prototype.updateContentsDisplays = function() {
         const that = this;
-        const contentDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_contents_display`);
+        const contentDisplays = document.getElementById('passages').querySelectorAll(`.${this.key}_contents_display`);
         contentDisplays.forEach(function(contentDisplay) {
-            const emptyText = contentDisplay.emptyText || `There is nothing on the ${that.displayName}`;
-            const notEmptyText = contentDisplay.notEmptyText || `The ${that.displayName} has on it:`;
+            const notEmptyText = contentDisplay.notEmptyText == null ? `${that.name} has on it:<br>` : contentDisplay.notEmptyText;
+            const emptyText = contentDisplay.emptyText == null ? `${that.name} is empty` : contentDisplay.emptyText;
+            const itemText = contentDisplay.itemText == null ? `<pre style='display: inline; font: inherit'>\t$name$ - $removeOption$</pre><br>` : contentDisplay.itemText;
+
             jQuery(contentDisplay).empty();
-            jQuery(contentDisplay).wiki(`
-                <<if $${that.key}.contents.length === 0>>
-                    ${emptyText}
-                <<else>>
-                    ${notEmptyText}<br>
-                <</if>>
-                <<for _i = 0; _i < $${that.key}.contents.length; _i++>>
-                    <<capture _i>>
-                        <p class="in"><<= $${that.key}.get(_i).displayName>> - <<link "remove">><<run $${that.key}.removeIndex(_i)>><</link>></p>
-                    <</capture>>
-                <</for>>
-            `.replace(/\r?\n|\r/g, ""));
+            if (that.contents.length !== 0) {
+                jQuery(contentDisplay).wiki(notEmptyText);
+                for (let i = 0; i < that.contents.length; i++) {
+                    const item = SCVariable.getVar(that.contents[i]);
+                    jQuery(contentDisplay).wiki(itemText.replace(dataRegex, function(rawText, dataName) {
+                        let propValue;
+                        if (dataName === 'removeOption') {
+                            return `<<link 'remove'>><<run $${that.key}.removeIndex(${i})>><</link>>`
+                        } else if (dataName === 'index') {
+                            return i;
+                        } else if (item.hasOwnProperty(dataName)) {
+                            propValue = item[dataName];
+                        } else {
+                            return rawText;
+                        }
+
+                        return typeof propValue === 'string' ? propValue : JSON.stringify(propValue);
+                    }));
+                }
+            } else {
+                jQuery(contentDisplay).wiki(emptyText);
+            }
         });
     }
     const updateContentsDisplaysCallback = function(e) {
@@ -651,9 +674,19 @@ const Balance = (function() {
 
     Balance.prototype.updateMeasurementDisplays = function() {
         const that = this;
-        const measurementDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_measurement_display`);
+        const measurementDisplays = document.getElementById('passages').querySelectorAll(`.${this.key}_measurement_display`);
         measurementDisplays.forEach(function(measurementDisplay) {
-            jQuery(measurementDisplay).html(that.measureMass());
+            const measurementText = measurementDisplay.measurementText == null ? '$mass$' : measurementDisplay.measurementText;
+            const measurement = that.measureMass();
+
+            jQuery(measurementDisplay).empty();
+            jQuery(measurementDisplay).wiki(measurementText.replace(dataRegex, function(rawText, dataName) {
+                if (dataName === 'mass' || dataName === 'measurement') {
+                    return measurement;
+                } else {
+                    return rawText;
+                }
+            }));
         });
     }
     const updateMeasurementDisplaysCallback = function(e) {
@@ -662,26 +695,26 @@ const Balance = (function() {
 
     Balance.prototype.updateAddOptionDisplays = function() {
         const that = this;
-        const addOptionDisplays = document.getElementById("passages").querySelectorAll(`.${this.key}_add_option_display`);
+        const addOptionDisplays = document.getElementById('passages').querySelectorAll(`.${this.key}_add_option_display`);
         addOptionDisplays.forEach(function(addOptionDisplay) {
             const objectToAdd = addOptionDisplay.objectToAdd;
-            const addPassage = addOptionDisplay.addPassage || "";
-            const removePassage = addOptionDisplay.removePassage || "";
-            const addText = addOptionDisplay.addText || `Place ${objectToAdd.displayName} on ${that.displayName}`;
-            const removeText = addOptionDisplay.removeText || `Remove ${objectToAdd.displayName} from ${that.displayName}`;
+            const addPassage = addOptionDisplay.addPassage || '';
+            const removePassage = addOptionDisplay.removePassage || '';
+            const addText = addOptionDisplay.addText == null ? `Place ${objectToAdd.name} on ${that.name}<br>` : addOptionDisplay.addText;
+            const removeText = addOptionDisplay.removeText == null ? `Remove ${objectToAdd.name} from ${that.name}<br>` : addOptionDisplay.removeText;
             jQuery(addOptionDisplay).empty();
             if (that.indexOf(addOptionDisplay.objectToAdd) === -1) {
                 jQuery(addOptionDisplay).wiki(`
-                    <<link "${addText}" ${addPassage}>>
+                    <<link '${addText}' ${addPassage}>>
                         <<run $${that.key}.add($${objectToAdd.key})>>
                     <</link>>
-                `.replace(/\r?\n|\r/g, ""));
+                `.replace(newlineRegex, ''));
             } else {
                 jQuery(addOptionDisplay).wiki(`
-                    <<link "${removeText}" ${removePassage}>>
+                    <<link '${removeText}' ${removePassage}>>
                         <<run $${that.key}.remove($${objectToAdd.key})>>
                     <</link>>
-                `.replace(/\r?\n|\r/g, ""));
+                `.replace(newlineRegex, ''));
             }
         });
     }
@@ -704,67 +737,90 @@ const Balance = (function() {
         populate.call(this, config);
     }
     
-    Macro.add("balance", {
-        tags: ["offset", "singleItem", "decimalPlaces", "displayName", "displayContents", "displayMeasurement", "displayAddOption"],
+    Macro.add('balance', {
+        tags: ['offset', 'singleItem', 'decimalPlaces', 'name', 'displayContents', 'displayMeasurement', 'displayAddOption'],
         handler() {
             const that = this;
             //console.log(this);
             if (this.args.length < 1) {
-                throw new Error("Missing Balance instance");
+                this.error('Missing Balance instance');
             }
+
+            // Handle a string passed for the parent object
             let parentObject = this.args[0];
+            let key = this.args.raw;
+            if (typeof parentObject === 'string') {
+                if (varRegex.test(parentObject)) {
+                    parentObject = State.getVar(parentObject);
+                } else {
+                    this.error(`The value ${JSON.stringify(parentObject)} isn't a valid variable name`);
+                }
+                key = this.args[0];
+            }
+
+            // Get parent object, or create it if necessary
             if (!parentObject) {
-                parentObject = Balance(this.args.raw.slice(1));
+                parentObject = Balance(key.slice(1));
                 this.args[0] = parentObject;
             } else {
                 if (!(parentObject instanceof Balance)) {
-                    throw new Error("Argument must be an instance of Balance");
+                    this.error('Argument must be an instance of Balance');
                 }
             }
+
+            // Handle tags and content
             this.payload.forEach(function(chunk) {
-                if (chunk.name === "offset") {
+                if (chunk.name === 'offset') {
                     parentObject.offset = Number(chunk.args[0]);
-                } else if (chunk.name === "singleItem") {
+                } else if (chunk.name === 'singleItem') {
                     parentObject.singleItem = Boolean(chunk.args[0]);
-                } else if (chunk.name === "decimalPlaces") {
+                } else if (chunk.name === 'decimalPlaces') {
                     parentObject.decimalPlaces = Number(chunk.args[0]);
-                } else if (chunk.name === "displayName") {
-                    parentObject.displayName = String(chunk.args[0]);
-                } else if (chunk.name === "displayContents") {
-                    const contentsDisplay = document.createElement("div");
-                    contentsDisplay.className = parentObject.key + "_contents_display";
-                    contentsDisplay.emptyText = chunk.args[0] ? chunk.args[0] : "";
-                    contentsDisplay.notEmptyText = chunk.args[1] ? chunk.args[1] : "";
+                } else if (chunk.name === 'name') {
+                    parentObject.name = String(chunk.args[0]);
+                } else if (chunk.name === 'displayContents') {
+                    const contentsDisplay = document.createElement('div');
+                    contentsDisplay.className = parentObject.key + '_contents_display';
+                    contentsDisplay.notEmptyText = chunk.args[0];
+                    contentsDisplay.emptyText = chunk.args[1];
+                    contentsDisplay.itemText = chunk.args[2];
                     jQuery(that.output).append(contentsDisplay);
-                    $(document).on(":passagedisplay", function(e) {
+                    $(document).one(':passagedisplay', function(e) {
                         parentObject.updateContentsDisplays();
                     });
-                    parentObject.addEventListener("itemadded", updateContentsDisplaysCallback);
-                    parentObject.addEventListener("itemremoved", updateContentsDisplaysCallback);
-                } else if (chunk.name === "displayMeasurement") {
-                    const measurementDisplay = document.createElement("span");
-                    measurementDisplay.className = parentObject.key + "_measurement_display";
+                    parentObject.addEventListener('itemadded', updateContentsDisplaysCallback);
+                    parentObject.addEventListener('itemremoved', updateContentsDisplaysCallback);
+                } else if (chunk.name === 'displayMeasurement') {
+                    const measurementDisplay = document.createElement('span');
+                    measurementDisplay.className = parentObject.key + '_measurement_display';
+                    measurementDisplay.measurementText = chunk.args[0];
                     jQuery(that.output).append(measurementDisplay);
-                    $(document).on(":passagedisplay", function(e) {
+                    $(document).one(':passagedisplay', function(e) {
                         parentObject.updateMeasurementDisplays();
                     });
-                    parentObject.addEventListener("itemadded", updateMeasurementDisplaysCallback);
-                    parentObject.addEventListener("itemremoved", updateMeasurementDisplaysCallback);
-                    parentObject.addEventListener("zero", updateMeasurementDisplaysCallback);
-                } else if (chunk.name === "displayAddOption") {
-                    const addOptionDisplay = document.createElement("span");
-                    addOptionDisplay.className = parentObject.key + "_add_option_display";
+                    parentObject.addEventListener('itemadded', updateMeasurementDisplaysCallback);
+                    parentObject.addEventListener('itemremoved', updateMeasurementDisplaysCallback);
+                    parentObject.addEventListener('zero', updateMeasurementDisplaysCallback);
+                } else if (chunk.name === 'displayAddOption') {
+                    if (chunk.args.length < 1) {
+                        that.error('Missing item to add');
+                    } else if (!(chunk.args[0] instanceof LabEquipment)) {
+                        that.error('Item to add must be an instance of LabEquipment');
+                    }
+
+                    const addOptionDisplay = document.createElement('span');
+                    addOptionDisplay.className = parentObject.key + '_add_option_display';
                     addOptionDisplay.objectToAdd = chunk.args[0];
-                    addOptionDisplay.addPassage = chunk.args[1] ? chunk.args[1] : "";
-                    addOptionDisplay.removePassage = chunk.args[2] ? chunk.args[2] : "";
-                    addOptionDisplay.addText = chunk.args[3] ? chunk.args[3] : "";
-                    addOptionDisplay.removeText = chunk.args[4] ? chunk.args[4] : "";
+                    addOptionDisplay.addPassage = chunk.args[1];
+                    addOptionDisplay.removePassage = chunk.args[2];
+                    addOptionDisplay.addText = chunk.args[3];
+                    addOptionDisplay.removeText = chunk.args[4];
                     jQuery(that.output).append(addOptionDisplay);
-                    $(document).on(":passagedisplay", function(e) {
+                    $(document).one(':passagedisplay', function(e) {
                         parentObject.updateAddOptionDisplays();
                     });
-                    parentObject.addEventListener("itemadded", updateAddOptionDisplaysCallback);
-                    parentObject.addEventListener("itemremoved", updateAddOptionDisplaysCallback);
+                    parentObject.addEventListener('itemadded', updateAddOptionDisplaysCallback);
+                    parentObject.addEventListener('itemremoved', updateAddOptionDisplaysCallback);
                 }
                 jQuery(that.output).wiki(chunk.contents);
             });
@@ -781,7 +837,7 @@ const MaterialContainer = (function() {
         this.capacity = config.capacity || Infinity;
         this.volume = config.volume || 0;
         this.contentMass = config.contentMass || 0;
-        this.defineEvents(["materialadded", "materialremoved", "materialscombined", "emptied", "overflow"]);
+        this.defineEvents(['materialadded', 'materialremoved', 'materialscombined', 'emptied', 'overflow']);
     }
 
     const MaterialContainer = function(key, restMass) {
@@ -798,7 +854,7 @@ const MaterialContainer = (function() {
         populate.call(this, config);
     }
     MaterialContainer.inheritFrom(LabEquipment);
-    Cloneable.setupConstructor(MaterialContainer, "MaterialContainer");
+    Cloneable.setupConstructor(MaterialContainer, 'MaterialContainer');
 
     const updateMeasurements = function() {
         let contentMass = 0;
@@ -823,7 +879,7 @@ const MaterialContainer = (function() {
             const e = Object.create(null);
             e.parent = this;
             e.materialAdded = material;
-            this.dispatchEvent(LEvent("overflow", e));
+            this.dispatchEvent(LEvent('overflow', e));
             return;
         }
 
@@ -833,7 +889,7 @@ const MaterialContainer = (function() {
             const e = Object.create(null);
             e.parent = this;
             e.materialAdded = material;
-            this.dispatchEvent(LEvent("materialadded", e));
+            this.dispatchEvent(LEvent('materialadded', e));
         }
 
         const e = Object.create(null);
@@ -841,10 +897,10 @@ const MaterialContainer = (function() {
         e.previousVolume = this.volume;
         e.previousContents = this.contents;
 
-        this.contents = MaterialManager.evaluateContents(clone(this.contents));
+        this.contents = MaterialManager.combineContents(clone(this.contents));
         updateMeasurements.call(this);
 
-        this.dispatchEvent(LEvent("materialscombined", e));
+        this.dispatchEvent(LEvent('materialscombined', e));
     }
 
     MaterialContainer.prototype.indexOf = function(material) {
@@ -879,6 +935,7 @@ const MaterialContainer = (function() {
     MaterialContainer.prototype.emptyInto = function(newContainer) {
         while (this.contents.length !== 0) {
             if (newContainer) {
+                newContainer = newContainer.getVar();
                 newContainer.add(this.contents.pop());
             } else {
                 this.contents.pop();
@@ -890,7 +947,7 @@ const MaterialContainer = (function() {
         const e = Object.create(null);
         e.parent = this;
         e.newContainer = newContainer;
-        this.dispatchEvent(LEvent("emptied", e));
+        this.dispatchEvent(LEvent('emptied', e));
     }
 
     MaterialContainer.prototype.removeIndex = function(index) {
@@ -905,14 +962,180 @@ const MaterialContainer = (function() {
         const e = Object.create(null);
         e.parent = this;
         e.materialRemoved = materialRemoved;
-        this.dispatchEvent(LEvent("materialremoved", e));
+        this.dispatchEvent(LEvent('materialremoved', e));
 
 		return materialRemoved;
     }
 
 	MaterialContainer.prototype.getMass = function() {
 		return this.restMass + this.contentMass;
-	}
+    }
+    
+    MaterialContainer.prototype.updateMaterialDisplays = function() {
+        const that = this;
+        const materialDisplays = document.getElementById('passages').querySelectorAll(`.${this.key}_material_display`);
+
+        materialDisplays.forEach(function(materialDisplay) {
+            const materialName = materialDisplay.materialName || '';
+            const material = that.get(materialName);
+            const hasMaterialText = materialDisplay.hasMaterialText == null ? `${that.name} contains ${materialName}<br>` : materialDisplay.hasMaterialText;
+            const noMaterialText = materialDisplay.noMaterialText || '';
+
+            let text;
+            if (material) {
+                text = hasMaterialText.replace(dataRegex, function(rawText, dataName) {
+                    let propValue;
+                    if (dataName === 'mass') {
+                        return material.mass;
+                    } else if (dataName === 'volume') {
+                        return material.volume;
+                    } else if (material.extensiveProperties.hasOwnProperty(dataName)) {
+                        propValue = material.extensiveProperties[dataName];
+                    } else if (material.attributes.hasOwnProperty(dataName)) {
+                        propValue = material.attributes[dataName];
+                    } else if (material.intensiveProperties.hasOwnProperty(dataName)) {
+                        propValue = material.intensiveProperties[dataName];
+                    } else {
+                        return rawText;
+                    }
+
+                    return typeof propValue === 'string' ? propValue : JSON.stringify(propValue);
+                });
+            } else {
+                text = noMaterialText.replace(dataRegex, function(rawText, dataName) {
+                    let propValue;
+                    const intensiveProperties = MaterialDefinition.getDefinition(materialName).intensiveProperties;
+                    if (intensiveProperties.hasOwnProperty(dataName)) {
+                        propValue = intensiveProperties[dataName];
+                    }
+                    return typeof propValue === 'string' ? propValue : JSON.stringify(propValue);
+                });
+            }
+            //console.log(text);
+            jQuery(materialDisplay).empty();
+            jQuery(materialDisplay).wiki(text);
+        });
+    }
+    const updateMaterialDisplaysCallback = function(e) {
+        e.parent.updateMaterialDisplays();
+    }
+
+    MaterialContainer.prototype.updateEmptyDisplays = function() {
+        const that = this;
+        const emptyDisplays = document.getElementById('passages').querySelectorAll(`.${this.key}_empty_display`);
+
+        emptyDisplays.forEach(function(emptyDisplay) {
+            const emptyText = emptyDisplay.emptyText == null ? `${that.name} is empty<br> ` : emptyDisplay.emptyText
+            const notEmptyText = emptyDisplay.notEmptyText || '';
+            const emptyIntoObject = emptyDisplay.emptyIntoObject;
+            const emptyIntoPassage = emptyDisplay.emptyIntoPassage || '';
+            const isEmpty = that.contents.length === 0;
+
+            jQuery(emptyDisplay).empty();
+            if (isEmpty) {
+                jQuery(emptyDisplay).wiki(emptyText);
+            } else {
+                if (emptyIntoObject instanceof MaterialContainer) {
+                    jQuery(emptyDisplay).wiki(`
+                        <<link '${notEmptyText}' ${emptyIntoPassage}>><<run $${that.key}.emptyInto($${emptyIntoObject.key})>><</link>>
+                    `.replace(newlineRegex, ''));
+                } else if (emptyIntoObject === 'discard') {
+                    jQuery(emptyDisplay).wiki(`
+                        <<link '${notEmptyText}' ${emptyIntoPassage}>><<run $${that.key}.emptyInto()>><</link>>
+                    `.replace(newlineRegex, ''));
+                } else {
+                    jQuery(emptyDisplay).wiki(notEmptyText);
+                }
+            }
+        });
+    }
+    const updateEmptyDisplaysCallback = function(e) {
+        e.parent.updateEmptyDisplays();
+    }
+
+    MaterialContainer.prototype.updateAddOptionDisplays = function() {
+        const that = this;
+        const addOptionDisplays = document.getElementById('passages').querySelectorAll(`.${this.key}_add_option_display`);
+
+        addOptionDisplays.forEach(function(addOptionDisplay) {
+            const materialToAdd = addOptionDisplay.materialToAdd;
+            const addPassage = addOptionDisplay.addPassage;
+            const addText = addOptionDisplay.addText == null ? `Add ${materialToAdd.name} to ${that.name}<br> ` : addOptionDisplay.addText
+            const addExpression = addOptionDisplay.addExpression == null ? true : addOptionDisplay.addExpression
+
+            jQuery(addOptionDisplay).empty();
+            if (Scripting.evalTwineScript(addExpression)) {
+                // Create and append <<link>> with custom callback
+                const $link = jQuery(document.createElement('a'));
+                $link.wikiWithOptions({profile: 'core'}, addText);
+                if (addPassage != null) {
+                    $link.attr('data-passage', addPassage);
+                    if (Story.has(addPassage)) {
+                        $link.addClass('link-internal');
+                        if (Config.addVisitedLinkClass && State.hasPlayed(passage)) {
+                            $link.addClass('link-visited');
+                        }
+                    }
+                    else {
+                        $link.addClass('link-broken');
+                    }
+                } else {
+                    $link.addClass('link-internal');
+                }
+                $link
+				.addClass(`macro-link`)
+				.ariaClick({
+					namespace : '.macros',
+					one       : addPassage != null
+				}, function() {
+					that.add(materialToAdd.clone());
+					if (addPassage != null) {
+                        Engine.play(addPassage)
+                    } else {
+                        that.updateAddOptionDisplays();
+                    }
+                })
+				.appendTo(addOptionDisplay);
+            }
+        });
+    }
+    const updateAddOptionDisplaysCallback = function(e) {
+        e.parent.updateAddOptionDisplays();
+    }
+
+    MaterialContainer.prototype.updateRemoveOptionDisplays = function() {
+        const that = this;
+        const removeOptionDisplays = document.getElementById('passages').querySelectorAll(`.${this.key}_remove_option_display`);
+
+        removeOptionDisplays.forEach(function(removeOptionDisplay) {
+            const materialName = removeOptionDisplay.materialName || '';
+            const removeToObject = removeOptionDisplay.removeToObject;
+            const removePassage = removeOptionDisplay.removePassage || '';
+            let removeText = removeOptionDisplay.removeText == null ? `Remove ${materialName} from ${that.name} ` : removeOptionDisplay.removeText
+
+            jQuery(removeOptionDisplay).empty();
+            if (that.has(materialName)) {
+                if (removeToObject instanceof MaterialContainer) {
+                    if (!removeOptionDisplay.removeText) {
+                        removeText += ` and add it to ${removeToObject.name}<br>`;
+                    }
+                    jQuery(removeOptionDisplay).wiki(`
+                        <<link '${removeText}' ${removePassage}>><<run $${removeToObject.key}.add($${that.key}.remove('${materialName}'))>><</link>>
+                    `.replace(newlineRegex, ''));
+                } else {
+                    if (!removeOptionDisplay.removeText) {
+                        removeText += '<br>';
+                    }
+                    jQuery(removeOptionDisplay).wiki(`
+                        <<link '${removeText}' ${removePassage}>><<run $${that.key}.remove('${materialName}')>><</link>>
+                    `.replace(newlineRegex, ''));
+                }
+            }
+        });
+    }
+    const updateRemoveOptionDisplaysCallback = function(e) {
+        e.parent.updateRemoveOptionDisplays();
+    }
 
     MaterialContainer.fromObj = function(obj) {
         if (this === MaterialContainer) {
@@ -932,30 +1155,130 @@ const MaterialContainer = (function() {
         populate.call(this, config);
     }
 
-    Macro.add("container", {
-        tags: ["restMass", "capacity", "displayName", "displayAddMaterial", "displayEmptyInto"],
+    Macro.add('container', {
+        tags: ['restMass', 'capacity', 'name', 'displayMaterial', 'displayEmpty', 'displayAddOption', 'displayRemoveOption'],
         handler() {
             const that = this;
-            //console.log(this);
             if (this.args.length < 1) {
-                throw new Error("Missing MaterialContainer instance");
+                this.error('Missing MaterialContainer instance');
             }
+
+            // Handle a string passed for the parent object
             let parentObject = this.args[0];
+            let key = this.args.raw;
+            if (typeof parentObject === 'string') {
+                if (varRegex.test(parentObject)) {
+                    parentObject = State.getVar(parentObject);
+                } else {
+                    this.error(`The value ${JSON.stringify(parentObject)} isn't a valid variable name`);
+                }
+                key = this.args[0];
+            }
+
+            // Get parent object, or create it if necessary
             if (!parentObject) {
-                parentObject = MaterialContainer(this.args.raw.slice(1));
+                parentObject = MaterialContainer(key.slice(1));
                 this.args[0] = parentObject;
             } else {
-                if (!(parentObject instanceof Balance)) {
-                    throw new Error("Argument must be an instance of MaterialContainer");
+                if (!(parentObject instanceof MaterialContainer)) {
+                    this.error('Argument must be an instance of MaterialContainer');
                 }
             }
+
+            // Handle tags and content
             this.payload.forEach(function(chunk) {
-                if (chunk.name === "restMass") {
+                let evalContents = true;
+                if (chunk.name === 'restMass') {
                     parentObject.restMass = Number(chunk.args[0]);
-                } else if (chunk.name === "capacity") {
+                } else if (chunk.name === 'capacity') {
                     parentObject.capacity = Number(chunk.args[0]);
-                } else if (chunk.name === "displayName") {
-                    parentObject.displayName = String(chunk.args[0]);
+                } else if (chunk.name === 'name') {
+                    parentObject.name = String(chunk.args[0]);
+                } else if (chunk.name === 'displayMaterial') {
+                    if (chunk.args.length < 1) {
+                        that.error('Missing material name');
+                    } else if (typeof chunk.args[0] !== 'string') {
+                        that.error('Material name must be a string');
+                    }
+
+                    const materialDisplay = document.createElement('span');
+                    materialDisplay.className = parentObject.key + '_material_display';
+                    materialDisplay.materialName = chunk.args[0];
+                    materialDisplay.hasMaterialText = chunk.args[1];
+                    materialDisplay.noMaterialText = chunk.args[2];
+                    jQuery(that.output).append(materialDisplay);
+                    $(document).one(':passagedisplay', function(e) {
+                        parentObject.updateMaterialDisplays();
+                    });
+                    parentObject.addEventListener('materialadded', updateMaterialDisplaysCallback);
+                    parentObject.addEventListener('materialremoved', updateMaterialDisplaysCallback);
+                    parentObject.addEventListener('emptied', updateMaterialDisplaysCallback);
+                } else if (chunk.name === 'displayEmpty') {
+                    if (chunk.args.length < 1) {
+                        that.error('Missing message to display if empty');
+                    } else if (chunk.args[2]) {
+                        if (!(chunk.args[2] instanceof MaterialContainer) && chunk.args[2] !== 'discard') {
+                            that.error('Container to empty into must be an instanceof MaterialContainer or keyword \'discard\'');
+                        }
+                    }
+
+                    const emptyDisplay = document.createElement('span');
+                    emptyDisplay.className = parentObject.key + '_empty_display';
+                    emptyDisplay.emptyText = chunk.args[0];
+                    emptyDisplay.notEmptyText = chunk.args[1];
+                    emptyDisplay.emptyIntoObject = chunk.args[2];
+                    emptyDisplay.emptyIntoPassage = chunk.args[3];
+                    jQuery(that.output).append(emptyDisplay);
+                    $(document).one(':passagedisplay', function(e) {
+                        parentObject.updateEmptyDisplays();
+                    });
+                    parentObject.addEventListener('materialadded', updateEmptyDisplaysCallback);
+                    parentObject.addEventListener('materialremoved', updateEmptyDisplaysCallback);
+                    parentObject.addEventListener('emptied', updateEmptyDisplaysCallback);
+                } else if (chunk.name === 'displayAddOption') {
+                    if (chunk.args.length < 1) {
+                        that.error('Missing material argument');
+                    } else if (!(chunk.args[0] instanceof Material)) {
+                        that.error('First argument must be an instance of Material');
+                    }
+
+                    const addOptionDisplay = document.createElement('span');
+                    addOptionDisplay.className = parentObject.key + '_add_option_display';
+                    addOptionDisplay.materialToAdd = chunk.args[0];
+                    addOptionDisplay.addPassage = chunk.args[1];
+                    addOptionDisplay.addText = chunk.args[2];
+                    addOptionDisplay.addExpression = chunk.args[3];
+                    jQuery(that.output).append(addOptionDisplay);
+                    $(document).one(':passagedisplay', function(e) {
+                        parentObject.updateAddOptionDisplays();
+                    });
+                    if (addOptionDisplay.addExpression != null) {
+                        parentObject.addEventListener('materialadded', updateAddOptionDisplaysCallback);
+                        parentObject.addEventListener('materialremoved', updateAddOptionDisplaysCallback);
+                        parentObject.addEventListener('emptied', updateAddOptionDisplaysCallback);
+                    }
+                } else if (chunk.name === 'displayRemoveOption') {
+                    if (chunk.args.length < 1) {
+                        that.error('Missing material name argument');
+                    } else if (typeof chunk.args[0] !== 'string') {
+                        that.error('Material name must be a string');
+                    } else if (chunk.args[1] && !(chunk.args[1] instanceof MaterialContainer)) {
+                        that.error('The object to add the material to on removal must be an instance of MaterialContainer');
+                    }
+
+                    const removeOptionDisplay = document.createElement('span');
+                    removeOptionDisplay.className = parentObject.key + '_remove_option_display';
+                    removeOptionDisplay.materialName = chunk.args[0];
+                    removeOptionDisplay.removeToObject = chunk.args[1];
+                    removeOptionDisplay.removePassage = chunk.args[2];
+                    removeOptionDisplay.removeText = chunk.args[3];
+                    jQuery(that.output).append(removeOptionDisplay);
+                    $(document).one(':passagedisplay', function(e) {
+                        parentObject.updateRemoveOptionDisplays();
+                    });
+                    parentObject.addEventListener('materialadded', updateRemoveOptionDisplaysCallback);
+                    parentObject.addEventListener('materialremoved', updateRemoveOptionDisplaysCallback);
+                    parentObject.addEventListener('emptied', updateRemoveOptionDisplaysCallback);
                 }
                 jQuery(that.output).wiki(chunk.contents);
             });
@@ -1003,17 +1326,17 @@ const MaterialDefinition = (function() {
     MaterialDefinition.getDefinition = function(name) {
         const definition = definitions.get(name);
         if (!definition) {
-            throw new Error("A material named " + name + " is not defined");
+            throw new Error('A material named ' + name + ' is not defined');
         }
         return definition;
     }
 
-    Macro.add("defineMaterial", {
+    Macro.add('defineMaterial', {
         handler() {
-            if (typeof this.args[0] !== "string") {
-                this.error("Missing material name.");
-            } else if (this.args[1] && typeof this.args[1] !== "object") {
-                this.error("Additional intensive property argument must be an object.");
+            if (typeof this.args[0] !== 'string') {
+                this.error('Missing material name.');
+            } else if (this.args[1] && typeof this.args[1] !== 'object') {
+                this.error('Additional intensive property argument must be an object.');
             }
             const intensiveProperties = this.args[1] || {};
             MaterialDefinition(this.args[0], intensiveProperties);
@@ -1093,7 +1416,7 @@ const Material = (function() {
         });
     }
 
-    const Material = function(name, extensiveProperties = Object.create(null), attributes = Object.create(null)) {
+    const Material = function(name, extensiveProperties = {}, attributes = {}) {
         if (!this) {
             const material = Object.create(Material.prototype);
             Material.call(material, ...arguments);
@@ -1108,7 +1431,7 @@ const Material = (function() {
         populate.call(this, config);
     }
     Material.inheritFrom(Cloneable);
-    Cloneable.setupConstructor(Material, "Material");
+    Cloneable.setupConstructor(Material, 'Material');
 
     Material.prototype.splitOff = function(percentage) {
         const that = this;
@@ -1172,16 +1495,16 @@ const MaterialManager = (function() {
         const wrapper = function(materials) {
             names.forEach(function(name, i) {
                 if (name !== materials[i].name) {
-                    throw new Error("The given material does not match the recipe's name!");
+                    throw new Error('The given material does not match the recipe\'s name.');
                 }
             });
             const results = callback(materials);
             if (names.length === 1) {
                 if (results.length > 1) {
-                    throw new Error("Multiple materials returned when only one was expected!");
+                    throw new Error('Multiple materials returned when only one was expected.');
                 }
                 if (names[0].name === results[0].name) {
-                    throw new Error("A recipe with a single name must return a single material with that same name!");
+                    throw new Error('A recipe with a single name must return a single material with that same name.');
                 }
             }
             return results;
@@ -1198,10 +1521,10 @@ const MaterialManager = (function() {
     const Recipe = function(names, callback) {
         const namesSeen = Object.create(null);
         names.forEach(function(name) {
-            if (typeof name !== "string") {
-                throw new Error("All recipe names must be strings!");
+            if (typeof name !== 'string') {
+                throw new Error('All recipe names must be strings.');
             } else if (namesSeen[name]) {
-                throw new Error("A recipe cannot match the same material more than once");
+                throw new Error('A recipe cannot match the same material more than once.');
             } else {
                 namesSeen[name] = true;
             }
@@ -1247,8 +1570,8 @@ const MaterialManager = (function() {
      * 
      * @param contents      An array of materials
      */
-    MaterialManager.evaluateContents = function(contents) {
-        let reevaluationRequired = false;
+    MaterialManager.combineContents = function(contents) {
+        let recombinationRequired = false;
 
         // Create a map of the contents where the material names are the keys and the array of materials are the values
         const contentMap = Object.create(null);
@@ -1289,10 +1612,10 @@ const MaterialManager = (function() {
                 return material;
             });
 
-            // If the recipe can be evaluated, set reevaluationRequired to true
+            // If the recipe can be evaluated, set recombinationRequired to true
             // Delete the consumed materials from contentMap, and add the resulting materials to contentMap
             if (canEvaluate) {
-                reevaluationRequired = true;
+                recombinationRequired = true;
                 let newMaterials = recipe.evaluate(materials);
                 recipe.names.forEach(function(name) {
                     delete contentMap[name];
@@ -1315,9 +1638,9 @@ const MaterialManager = (function() {
             return contentMap[key];
         });
 
-        // If the reevaluationRequired flag is true, reevaluate the newly produced contents, otherwise return them
-        if (reevaluationRequired) {
-            return MaterialManager.evaluateContents(newContents);
+        // If the recombinationRequired flag is true, reevaluate the newly produced contents, otherwise return them
+        if (recombinationRequired) {
+            return MaterialManager.combineContents(newContents);
         } else {
             return newContents;
         }
@@ -1354,21 +1677,21 @@ const MaterialManager = (function() {
     }
 
     // Add SugarCube interface for adding recipes
-    Macro.add("addRecipe", {
+    Macro.add('addRecipe', {
         tags: null,
         handler() {
             //console.log(this);
             const that = this;
             const args = this.args;
             const content = this.payload[0].contents.trim();
-            if (content !== "") {
+            if (content !== '') {
                 // Create callback recipe function
                 let callback;
-                if (args[args.length - 1] === "JS") {
+                if (args[args.length - 1] === 'JS') {
                     args.pop();
-                    callback = Function("materials", content);
+                    callback = Function('materials', content);
                 } else {
-                    this.addShadow("$reactants", "$products");
+                    this.addShadow('$reactants', '$products');
                     let reactantsCache;
                     let productsCache;
                     const shadowWrapped = this.createShadowWrapper(function(reactants) {
@@ -1414,64 +1737,91 @@ window.Material = Material;
 
 // Callback macros
 (function() {
-    const triggerCallbacks = function(ids, args) {
-        const store = State.temporary["_callbacks"];
+    const store = Object.create(null);
+    const storeContent = Object.create(null);
+
+    const triggerCallbacks = function(ids, args, output) {
+        if (typeof ids === 'string') {
+            ids = [ids];
+        }
+        ids.forEach(function(id) {
+            if (store[id]) {
+                store[id].forEach(function(callback) {
+                    try {
+                        callback(args, output);
+                    } catch(e) {
+                        console.log(e);
+                    }
+                });
+            }
+        });
+    }
+
+    const triggerHandlers = function(ids, args, output) {
+        const store = State.temporary['_handlers'];
         if (store) {
-            if (typeof ids === "string") {
+            if (typeof ids === 'string') {
                 ids = [ids];
             }
             ids.forEach(function(id) {
                 if (store[id]) {
                     store[id].forEach(function(callback) {
                         try {
-                            callback(args);
+                            callback(args, output);
                         } catch(e) {
                             console.log(e);
                         }
                     });
                 }
-            })
+            });
         }
     }
 
     /* SugarCube code block to be executed later */
-    Macro.add("callback", {
+    Macro.add(['callback', 'handler'], {
         tags: null,
         isAsync: true,
         validIdRe: /^[A-Za-z_]\w*$/,
         handler() {
+            const that = this;
+            if (State.passage !== '' && State.passage !== 'StoryInit' && this.name === 'callback') {
+                console.warn('Callbacks created in passages other than StoryInit are not guaranteed to exist in any other passages in the future.');
+            }
+            
             // Make sure arguments are given
             if (this.args.length === 0) {
-                return this.error("Missing callback ID(s).");
+                return this.error('Missing callback ID(s).');
             }
 
             // Determine whether to run the callback as javascript
             let isJS = false;
-            if (this.args[this.args.length] === "JS") {
+            if (this.args[this.args.length] === 'JS') {
                 isJS = true;
                 this.args.pop();
             }
 
             // Check callback IDs
             const ids = Array.from(this.args);
-            const wrongId = ids.find((id) => typeof id !== "string" || !id.match(this.self.validIdRe))
+            const wrongId = ids.find((id) => typeof id !== 'string' || !id.match(this.self.validIdRe))
             if (!!wrongId) {
-                return this.error("The value " + JSON.stringify(wrongId) + " isn't a valid ID.");
+                return this.error(`The value ${JSON.stringify(wrongId)} isn't a valid ID.`);
             }
             
             // Create callback function and store it in a temporary variable
             const content = this.payload[0].contents.trim();
-            if (content !== "") {
+            if (content !== '') {
                 // Create callback
                 let callback;
                 if (isJS) {
-                    callback = Function("args", content);
+                    callback = Function('args', 'output', content);
                 } else {
-                    this.addShadow("$args");
-                    callback = this.createShadowWrapper(function(args) {
+                    this.addShadow('$args');
+                    callback = this.createShadowWrapper(function(args, output) {
+                        output = output || that.output;
+
                         const argsCache = State.variables.args;
                         State.variables.args = args;
-                        Wikifier.wikifyEval(content);
+                        jQuery(output).wiki(content);
                         if (argsCache !== undefined) {
                             State.variables.args = argsCache;
                         } else {
@@ -1480,51 +1830,78 @@ window.Material = Material;
                     });
                 }
 
-                // Add callback to store
-                const store = State.temporary["_callbacks"] = State.temporary["_callbacks"] || {};
-                ids.forEach((id) => {
-                    if(!store[id]) {
-                        store[id] = [];
-                    }
-                    store[id].push(callback);
-                });
+                if (that.name === 'handler') {
+                    let store = State.temporary['_handlers'] = State.temporary['_handlers'] || {};
+                    // Add handler to store
+                    ids.forEach(function(id) {
+                        if (!store[id]) {
+                            store[id] = [];
+                        }
+                        store[id].push(callback);
+                    });
+                } else {
+                    // Add callback to store
+                    ids.forEach(function(id) {
+                        if (!store[id]) {
+                            storeContent[id] = new Set();
+                            store[id] = [];
+                        }
+                        if (!storeContent[id].has(content)) {
+                            storeContent[id].add(content);
+                            store[id].push(callback);
+                        }
+                    });
+                }
             }
         }
     });
 
-    /* trigger some handler from before */
-    Macro.add("trigger", {
+    /* trigger some callback or handler from before */
+    Macro.add('trigger', {
         validIdRe: /^[A-Za-z_]\w*$/,
         handler() {
+            const that = this;
+
             if (this.args.length === 0) {
-                return this.error("Missing callback ID(s).");
+                return this.error('Missing callback ID(s).');
             }
             const ids = (this.args[0] instanceof Array ? this.args[0].map((id) => String(id)) : [String(this.args[0])]);
             const wrongId = ids.find((id) => typeof id !== 'string' || !id.match(this.self.validIdRe))
             if (!!wrongId) {
-                return this.error("The value " + JSON.stringify(wrongId) + " isn't a valid ID.");
+                return this.error('The value ' + JSON.stringify(wrongId) + ' isn\'t a valid ID.');
             }
-            triggerCallbacks(ids, this.args.slice(1));
+            triggerCallbacks(ids, this.args.slice(1), this.output);
+            triggerHandlers(ids, this.args.slice(1), this.output);
         }
     });
+
+    //window.store = store;
+    //window.storeContent = storeContent;
 })();
 
 // the <<done>> macro, v1.0.1; for SugarCube 2, by chapel
 (function () {
     // the core function
-    Macro.add("done", {
+    Macro.add('done', {
         skipArgs: true,
         tags: null,
         handler() {        
             const content = this.payload[0].contents.trim();
-            if (content === "") {
+            if (content === '') {
                 return; // bail
             }
 
             const that = this;
-            $(document).on(":passagedisplay", function(e) {
+            $(document).one(':passagedisplay', function(e) {
                 Wikifier.wikifyEval(content);
             });
         }
     });
 }());
+
+/*Macro.add('test', {
+    skipArgs: false,
+    handler() {
+        console.log(this);
+    }
+});*/
